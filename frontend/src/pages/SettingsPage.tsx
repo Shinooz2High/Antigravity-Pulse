@@ -250,7 +250,7 @@ export function SettingsPage({
 
   const buildInviteMessage = () => {
     if (!pairInfo) return '';
-    const link = pairInfo.quick_short_url || pairInfo.pair_url;
+    const link = pairInfo.pair_url;
     const codeLine = pairInfo.quick_code
       ? `\nHoặc mở App Antigravity Pulse và nhập mã 6 ký tự: ${pairInfo.quick_code}`
       : '';
@@ -259,7 +259,7 @@ export function SettingsPage({
 
   const handleSharePairUrl = async () => {
     if (!pairInfo?.pair_url) return;
-    const link = pairInfo.quick_short_url || pairInfo.pair_url;
+    const link = pairInfo.pair_url;
     const res = await shareContent({
       title: 'Kết nối Antigravity Pulse',
       text: buildInviteMessage(),
@@ -277,7 +277,7 @@ export function SettingsPage({
       const res = await shareContent({
         title: 'Gửi qua Zalo — Antigravity Pulse',
         text: msg,
-        url: pairInfo.quick_short_url || pairInfo.pair_url,
+        url: pairInfo.pair_url,
       });
       if (res === 'shared' || res === 'cancelled') return;
     }
@@ -287,7 +287,7 @@ export function SettingsPage({
 
   const handleShareMessenger = async () => {
     if (!pairInfo?.pair_url) return;
-    const link = pairInfo.quick_short_url || pairInfo.pair_url;
+    const link = pairInfo.pair_url;
     const msg = buildInviteMessage();
     await copyToClipboard(msg);
     if (isNativeApp()) {
@@ -570,21 +570,16 @@ export function SettingsPage({
                   Link mở 1 chạm (gửi qua Zalo / Messenger cho máy khác bấm vào là tự đăng nhập)
                 </p>
                 <p className="mt-1 break-all font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  {pairInfo.quick_short_url || pairInfo.pair_url}
+                  {pairInfo.pair_url}
                 </p>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      handleCopy(
-                        'liên kết 1 chạm',
-                        pairInfo.quick_short_url || pairInfo.pair_url
-                      )
-                    }
+                    onClick={() => handleCopy('liên kết 1 chạm', pairInfo.pair_url)}
                     className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-cyan-500/15 px-3 text-xs font-semibold text-cyan-700 dark:text-cyan-300"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    Sao chép link ngắn
+                    Sao chép link
                   </button>
                   <button
                     type="button"
