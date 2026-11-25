@@ -61,23 +61,26 @@ export function groupRunsIntoConversations(
   const threads: ConversationThread[] = [];
   for (const [id, group] of buckets.entries()) {
     const sorted = [...group].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      (a, b) =>
+        new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
     );
     const first = sorted[0];
     const latest = sorted[sorted.length - 1];
+    if (!latest) continue;
     threads.push({
       id,
       title: first?.prompt?.trim() || 'Cuộc trò chuyện',
-      projectName: latest?.project_name || first?.project_name || 'Workspace',
+      projectName: latest.project_name || first?.project_name || 'Workspace',
       runs: sorted,
       latestRun: latest,
-      updatedAt: latest.finished_at || latest.started_at || latest.created_at,
+      updatedAt: latest.finished_at || latest.started_at || latest.created_at || '',
       status: latest.status,
     });
   }
 
   threads.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    (a, b) =>
+      new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
   );
   return threads;
 }
