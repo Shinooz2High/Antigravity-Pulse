@@ -248,58 +248,60 @@ export function SettingsPage({
     onNotify(ok ? `Đã sao chép ${label}` : 'Không thể sao chép', ok ? 'success' : 'error');
   };
 
+  const primaryShareUrl = pairInfo?.quick_code
+    ? `${PUBLIC_WEB_PORTAL_URL}/?c=${encodeURIComponent(pairInfo.quick_code)}`
+    : pairInfo?.pair_url || '';
+
   const buildInviteMessage = () => {
     if (!pairInfo) return '';
-    const link = pairInfo.pair_url;
+    const link = primaryShareUrl;
     const codeLine = pairInfo.quick_code
-      ? `\nHoặc mở App Antigravity Pulse và nhập mã 6 ký tự: ${pairInfo.quick_code}`
+      ? `\nHoặc vào ${PUBLIC_WEB_PORTAL_URL} và nhập mã: ${pairInfo.quick_code}`
       : '';
-    return `⚡ Bấm vào link này để kết nối Antigravity Pulse (tự đăng nhập luôn, không cần PIN hay IP):\n${link}${codeLine}`;
+    return `⚡ Bấm link gọn này để kết nối Antigravity Pulse (tự đăng nhập 1 chạm, không cần PIN hay IP):\n${link}${codeLine}`;
   };
 
   const handleSharePairUrl = async () => {
-    if (!pairInfo?.pair_url) return;
-    const link = pairInfo.pair_url;
+    if (!primaryShareUrl) return;
     const res = await shareContent({
       title: 'Kết nối Antigravity Pulse',
       text: buildInviteMessage(),
-      url: link,
+      url: primaryShareUrl,
     });
     if (res === 'shared' || res === 'cancelled') return;
     handleCopy('tin nhắn ghép nối 1 chạm', buildInviteMessage());
   };
 
   const handleShareZalo = async () => {
-    if (!pairInfo?.pair_url) return;
+    if (!primaryShareUrl) return;
     const msg = buildInviteMessage();
     await copyToClipboard(msg);
     if (isNativeApp()) {
       const res = await shareContent({
         title: 'Gửi qua Zalo — Antigravity Pulse',
         text: msg,
-        url: pairInfo.pair_url,
+        url: primaryShareUrl,
       });
       if (res === 'shared' || res === 'cancelled') return;
     }
     openExternalLink('https://chat.zalo.me/');
-    onNotify('Đã chép sẵn tin nhắn + link 1 chạm! Chọn người nhận (hoặc Cloud của tôi) trong Zalo rồi nhấn Dán (Ctrl+V) để gửi.', 'success');
+    onNotify('Đã chép sẵn tin nhắn + link gọn 1 chạm! Chọn người nhận (hoặc Cloud của tôi) trong Zalo rồi nhấn Dán (Ctrl+V) để gửi.', 'success');
   };
 
   const handleShareMessenger = async () => {
-    if (!pairInfo?.pair_url) return;
-    const link = pairInfo.pair_url;
+    if (!primaryShareUrl) return;
     const msg = buildInviteMessage();
     await copyToClipboard(msg);
     if (isNativeApp()) {
       const res = await shareContent({
         title: 'Gửi qua Messenger — Antigravity Pulse',
         text: msg,
-        url: link,
+        url: primaryShareUrl,
       });
       if (res === 'shared' || res === 'cancelled') return;
     }
     openExternalLink('https://www.messenger.com/');
-    onNotify('Đã chép sẵn tin nhắn + link 1 chạm! Chọn cuộc trò chuyện trong Messenger rồi nhấn Dán (Ctrl+V) để gửi.', 'success');
+    onNotify('Đã chép sẵn tin nhắn + link gọn 1 chạm! Chọn cuộc trò chuyện trong Messenger rồi nhấn Dán (Ctrl+V) để gửi.', 'success');
   };
 
   const handleSaveServerUrl = async () => {
@@ -567,15 +569,15 @@ export function SettingsPage({
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-[#090d16]">
                 <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  Link mở 1 chạm (gửi qua Zalo / Messenger cho máy khác bấm vào là tự đăng nhập)
+                  Link gọn 1 chạm (gửi qua Zalo / Messenger cho máy khác bấm vào là tự đăng nhập)
                 </p>
-                <p className="mt-1 break-all font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  {pairInfo.pair_url}
+                <p className="mt-1 break-all font-mono text-xs font-semibold text-cyan-700 dark:text-cyan-300">
+                  {primaryShareUrl}
                 </p>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => handleCopy('liên kết 1 chạm', pairInfo.pair_url)}
+                    onClick={() => handleCopy('link gọn 1 chạm', primaryShareUrl)}
                     className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-cyan-500/15 px-3 text-xs font-semibold text-cyan-700 dark:text-cyan-300"
                   >
                     <Copy className="h-3.5 w-3.5" />

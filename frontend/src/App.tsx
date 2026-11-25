@@ -18,6 +18,7 @@ import {
   setToken,
   setUnauthorizedHandler,
 } from './lib/api';
+import { resolveQuickConnectCode } from './lib/quickConnect';
 import {
   hasNotificationPermission,
   hideNativeSplash,
@@ -172,7 +173,46 @@ export default function App() {
         setServerUrl(serverParam);
       }
       const pairToken = url.searchParams.get('pair');
+      const quickCodeParam = url.searchParams.get('code') || url.searchParams.get('c');
       const googleLoginState = url.searchParams.get('google_login_state');
+
+      if (quickCodeParam) {
+        setPairingInProgress(true);
+        try {
+          const resolved = await resolveQuickConnectCode(quickCodeParam);
+          setServerUrl(resolved.serverUrl);
+          const res = await api.pair(resolved.pairToken, getDeviceName());
+          if (!cancelled) {
+            setToken(res.token);
+            url.searchParams.delete('code');
+            url.searchParams.delete('c');
+            const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+            window.history.replaceState({}, document.title, cleanUrl);
+            setAuthError(null);
+            setAuthenticated(true);
+          }
+        } catch (err) {
+          if (!cancelled) {
+            url.searchParams.delete('code');
+            url.searchParams.delete('c');
+            const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+            window.history.replaceState({}, document.title, cleanUrl);
+            setAuthError(
+              err instanceof Error
+                ? `Kết nối nhanh thất bại: ${err.message}`
+                : 'Không thể kết nối bằng mã 6 ký tự này.'
+            );
+            setAuthenticated(false);
+          }
+        } finally {
+          if (!cancelled) {
+            setPairingInProgress(false);
+            setBooting(false);
+          }
+          hideNativeSplash().catch(() => undefined);
+        }
+        return;
+      }
 
       if (googleLoginState) {
         setPairingInProgress(true);
