@@ -18,6 +18,7 @@ import {
   api,
   getDeviceName,
   getServerUrl,
+  isRemoteWebHost,
   parsePairingInput,
   setDeviceName,
   setServerUrl,
@@ -53,11 +54,13 @@ export function AuthScreen({
   onGoogleTokenLogin,
 }: AuthScreenProps) {
   const native = isNativeApp();
+  const remoteWeb = isRemoteWebHost();
+  const needsServer = native || remoteWeb;
   const platform = getMobilePlatform();
 
   const [serverInput, setServerInput] = useState(() => getServerUrl());
   const [showServerField, setShowServerField] = useState(
-    () => native || Boolean(getServerUrl())
+    () => needsServer || Boolean(getServerUrl())
   );
   const [pin, setPin] = useState('');
   const [device, setDevice] = useState(() => getDeviceName());
@@ -177,7 +180,7 @@ export function AuthScreen({
   const handleContinueWithGoogle = async () => {
     setError(null);
     const effectiveServer = showServerField ? serverInput.trim() : '';
-    if (native && !effectiveServer) {
+    if (needsServer && !effectiveServer) {
       const msg =
         'Vui lòng nhập Địa chỉ Máy chủ PC (hoặc quét QR) trước khi đăng nhập bằng Google.';
       setError(msg);
@@ -372,7 +375,7 @@ export function AuthScreen({
     }
 
     const effectiveServer = showServerField ? serverInput.trim() : '';
-    if (native && !effectiveServer) {
+    if (needsServer && !effectiveServer) {
       setError(
         'Vui lòng quét mã QR hoặc nhập địa chỉ máy chủ PC (VD: 192.168.1.84:8765 hoặc https://xxx.trycloudflare.com).'
       );
@@ -398,8 +401,8 @@ export function AuthScreen({
 
   return (
     <AuroraBackground initialPalette="Aurora" showPalettePicker className="min-h-[100dvh]">
-      <div className="pt-safe pb-safe flex min-h-[100dvh] flex-col items-center justify-center px-4 py-8 text-slate-900 dark:text-slate-100">
-        <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white/85 p-6 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111827]/85">
+      <div className="pt-safe pb-safe flex min-h-[100dvh] flex-col items-center justify-center px-3 py-6 sm:px-4 sm:py-8 text-slate-900 dark:text-slate-100">
+        <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white/85 p-4 sm:p-6 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111827]/85">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3.5">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/25 text-cyan-500 ring-1 ring-cyan-500/30">
@@ -408,11 +411,15 @@ export function AuthScreen({
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-bold tracking-tight">Antigravity Pulse</h1>
-                  {native && (
+                  {native ? (
                     <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-cyan-600 dark:text-cyan-300">
                       {platform === 'ios' ? 'iOS' : 'Android'}
                     </span>
-                  )}
+                  ) : remoteWeb ? (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300">
+                      Web Portal
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Ứng dụng điều khiển Antigravity IDE trên PC
@@ -513,7 +520,7 @@ export function AuthScreen({
                       <Globe className="h-3.5 w-3.5 text-cyan-500" />
                       Địa chỉ Máy chủ PC (Wi-Fi LAN / Tunnel)
                     </label>
-                    {!native && (
+                    {!needsServer && (
                       <button
                         type="button"
                         onClick={() => {
@@ -533,9 +540,14 @@ export function AuthScreen({
                     autoCorrect="off"
                     value={serverInput}
                     onChange={(e) => setServerInput(e.target.value)}
-                    placeholder="VD: 192.168.1.84:8765 hoặc https://xxx.trycloudflare.com"
+                    placeholder="VD: 192.168.1.84:8765 hoặc link Tunnel của PC"
                     className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 font-mono text-xs text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-[#090d16] dark:text-white"
                   />
+                  {remoteWeb && (
+                    <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      Đang mở từ cổng web cố định — quét mã QR trên PC hoặc dán link Tunnel / IP LAN để kết nối.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-800 dark:bg-[#0b101b] dark:text-slate-400">

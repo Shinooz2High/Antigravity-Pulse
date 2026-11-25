@@ -34,6 +34,22 @@ const TOKEN_KEY = 'agy_pulse_token';
 const DEVICE_NAME_KEY = 'agy_pulse_device_name';
 const SERVER_URL_KEY = 'agy_pulse_server_url';
 
+export const PUBLIC_WEB_PORTAL_URL = 'https://agypulse.dpdns.org';
+
+export function isRemoteWebHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = (window.location.hostname || '').toLowerCase();
+  if (!host) return false;
+  return (
+    host === 'agypulse.dpdns.org' ||
+    host.endsWith('.dpdns.org') ||
+    host.endsWith('.vercel.app') ||
+    host.endsWith('.workers.dev') ||
+    host.endsWith('.pages.dev') ||
+    host.endsWith('.netlify.app')
+  );
+}
+
 let unauthorizedHandler: (() => void) | null = null;
 
 export function setUnauthorizedHandler(cb: (() => void) | null): void {
@@ -270,10 +286,10 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  if (isNativeApp() && !getServerUrl() && !/^https?:\/\//i.test(path)) {
+  if ((isNativeApp() || isRemoteWebHost()) && !getServerUrl() && !/^https?:\/\//i.test(path)) {
     throw new ApiError(
       0,
-      'Chưa cấu hình địa chỉ máy chủ PC. Hãy quét mã QR hoặc nhập địa chỉ IP / Cloudflare Tunnel của PC.'
+      'Chưa cấu hình địa chỉ máy chủ PC. Hãy quét mã QR hoặc nhập địa chỉ IP / Tunnel của PC.'
     );
   }
 

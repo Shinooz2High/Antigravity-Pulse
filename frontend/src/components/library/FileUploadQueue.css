@@ -1,0 +1,334 @@
+/* Lucian UX/UI Prompt #075 · Collapsible Multi-File Upload Queue Panel */
+.u075-wrap {
+  --ux-surface: #FFFFFF;
+  --ux-surface-3: #EAE7E1;
+  --ux-ink: #16151B;
+  --ux-ink-3: #8E8A97;
+  --ux-line: rgba(22, 21, 27, .09);
+  --ux-accent: #6A57F2;
+  --ux-mint: #119C72;
+  --ux-danger: #D93A55;
+  --ux-shadow-strong: rgba(40, 30, 80, .3);
+  --ux-ease: cubic-bezier(.2, .8, .2, 1);
+  --ux-spring: cubic-bezier(.34, 1.45, .64, 1);
+  position: relative;
+  width: 100%;
+  color: var(--ux-ink);
+}
+
+.dark .u075-wrap,
+:root[data-theme="dark"] .u075-wrap {
+  --ux-surface: rgba(16, 20, 36, .88);
+  --ux-surface-3: rgba(255, 255, 255, .1);
+  --ux-ink: #F4F0E8;
+  --ux-ink-3: rgba(244, 240, 232, .5);
+  --ux-line: rgba(255, 255, 255, .1);
+  --ux-accent: #B7A4FF;
+  --ux-mint: #7EE8C0;
+  --ux-danger: #FF7D8C;
+  --ux-shadow-strong: rgba(0, 0, 0, .65);
+}
+
+.u075-pan {
+  border-radius: 16px;
+  background: var(--ux-surface);
+  box-shadow: 0 0 0 1px var(--ux-line), 0 14px 30px -18px var(--ux-shadow-strong);
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: u075-slide .4s var(--ux-spring) both;
+}
+
+@keyframes u075-slide {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.u075-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 54px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.u075-ring {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+
+.u075-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.u075-ring circle {
+  fill: none;
+  stroke-width: 3.5;
+}
+
+.u075-ring .t {
+  stroke: var(--ux-surface-3);
+}
+
+.u075-ring .p {
+  stroke: var(--ux-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--p, 0) * 100);
+  transition: stroke .3s, stroke-dashoffset .35s var(--ux-ease);
+}
+
+.u075-ring i {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ux-mint);
+  opacity: 0;
+  transform: scale(.5);
+  transition: opacity .3s, transform .45s var(--ux-spring);
+}
+
+.u075-ring i svg {
+  width: 16px;
+  height: 16px;
+  transform: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.u075-wrap.is-done .u075-ring .p {
+  stroke: var(--ux-mint);
+}
+
+.u075-wrap.is-done .u075-ring i {
+  opacity: 1;
+  transform: none;
+}
+
+.u075-ht {
+  flex: 1;
+  min-width: 0;
+}
+
+.u075-ht b {
+  display: block;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -.015em;
+  color: var(--ux-ink);
+}
+
+.u075-ht small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ux-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.u075-chev {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  fill: none;
+  stroke: var(--ux-ink-3);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .4s var(--ux-spring);
+}
+
+.u075-wrap.is-fold .u075-chev {
+  transform: rotate(180deg);
+}
+
+.u075-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows .4s var(--ux-ease);
+}
+
+.u075-wrap.is-fold .u075-body {
+  grid-template-rows: 0fr;
+}
+
+.u075-body > ul {
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 8px;
+  list-style: none;
+}
+
+.u075-f {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-top: 1px solid var(--ux-line);
+}
+
+.u075-f:last-child {
+  padding-bottom: 10px;
+}
+
+.u075-ic {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--c);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .02em;
+}
+
+.u075-fx {
+  flex: 1;
+  min-width: 0;
+}
+
+.u075-fx > b {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.u075-fx b span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.u075-fx b small {
+  flex: none;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ux-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.u075-bar {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: var(--ux-surface-3);
+  overflow: hidden;
+}
+
+.u075-bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--ux-accent);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--p, 0));
+  transition: transform .3s var(--ux-ease), background-color .3s;
+}
+
+.u075-f.ok .u075-bar i {
+  background: var(--ux-mint);
+}
+
+.u075-f.bad .u075-bar i {
+  background: var(--ux-danger);
+}
+
+.u075-f.bad .u075-fx b small {
+  color: var(--ux-danger);
+}
+
+.u075-st {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.u075-st svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--ux-mint);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.u075-st path {
+  stroke-dasharray: 18;
+  stroke-dashoffset: 18;
+  transition: stroke-dashoffset .35s var(--ux-ease);
+}
+
+.u075-f.ok .u075-st path {
+  stroke-dashoffset: 0;
+}
+
+.u075-act {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  padding: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .08);
+  color: var(--ux-ink-3);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.u075-act:hover {
+  background: rgba(244, 63, 94, .18);
+  color: #fda4af;
+}
+
+.u075-retry {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ux-danger) 16%, transparent);
+  color: var(--ux-danger);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u075-pan,
+  .u075-body,
+  .u075-chev,
+  .u075-ring .p,
+  .u075-bar i {
+    animation: none !important;
+    transition-duration: .001ms !important;
+  }
+}

@@ -1,0 +1,5 @@
+public/theme-assets/user_media/*.mp4
+dist
+node_modules
+android
+ios

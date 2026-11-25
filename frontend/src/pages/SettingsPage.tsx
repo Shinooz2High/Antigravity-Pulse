@@ -8,6 +8,7 @@ import {
   Clock,
   Copy,
   Download,
+  ExternalLink,
   FlaskConical,
   Globe,
   KeyRound,
@@ -33,6 +34,7 @@ import {
   getDeviceName,
   getServerUrl,
   parsePairingInput,
+  PUBLIC_WEB_PORTAL_URL,
   setDeviceName,
   setServerUrl,
   setToken,
@@ -50,6 +52,7 @@ import {
 import { cn, copyToClipboard, formatBytes, formatRelativeTime } from '../lib/utils';
 import { GoogleAgyAuthSection } from '../components/GoogleAgyAuthSection';
 import { QrScannerModal } from '../components/QrScannerModal';
+import { AppDownloadCard } from '../components/library';
 import type {
   DeviceInfo,
   EngineMode,
@@ -525,6 +528,53 @@ export function SettingsPage({
         )}
       </section>
 
+      {/* Lucian #393 Mobile App Download Card (Android & iOS) */}
+      <section className="flex justify-center rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-[#111827]/80">
+        <AppDownloadCard
+          eyebrow="Antigravity Pulse Mobile"
+          title="Cùng một không gian làm việc, mọi nơi"
+          platforms={[
+            {
+              id: 'android',
+              label: 'Android',
+              cta: 'Tải cho Android (.apk)',
+              meta: mobileBuilds?.android_apk_available && mobileBuilds.android_apk_size
+                ? `APK trực tiếp · ${formatBytes(mobileBuilds.android_apk_size)} · Android 8.0+`
+                : 'Android 8.0+ · APK cài trực tiếp (GitHub Release)',
+              onDownload: () => {
+                const apkUrl = mobileBuilds?.android_apk_available
+                  ? api.getMobilePackageDownloadUrl('android')
+                  : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/download/latest/Antigravity-Pulse-Android.apk';
+                openExternalLink(apkUrl);
+                onNotify('Đang tải file cài đặt Antigravity-Pulse-Android.apk...', 'success');
+              },
+            },
+            {
+              id: 'ios',
+              label: 'iOS',
+              cta: 'Cài cho iOS (iPhone / iPad)',
+              meta: mobileBuilds?.ios_ipa_available && mobileBuilds.ios_ipa_size
+                ? `IPA · ${formatBytes(mobileBuilds.ios_ipa_size)} · iOS 15+`
+                : 'iOS 15+ · Safari (Thêm vào MH chính) / Xcode IPA',
+              onDownload: () => {
+                if (mobileBuilds?.ios_ipa_available) {
+                  openExternalLink(api.getMobilePackageDownloadUrl('ios'));
+                  onNotify('Đang tải gói cài đặt Antigravity Pulse (.ipa) cho iOS...', 'success');
+                } else if (canInstallPwa) {
+                  triggerPwaInstall();
+                  onNotify('Đang cài ứng dụng lên màn hình chính...', 'success');
+                } else {
+                  onNotify(
+                    'Trên Safari iPhone/iPad: Bấm nút Chia sẻ (□↑) → Chọn "Thêm vào Màn hình chính" để dùng full-screen như App gốc!',
+                    'info'
+                  );
+                }
+              },
+            },
+          ]}
+        />
+      </section>
+
       {/* Remote Access & Tunnel */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-[#111827]">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -726,6 +776,29 @@ export function SettingsPage({
         </div>
 
         <div className="mt-4 space-y-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3.5 py-2.5">
+            <span className="font-semibold text-cyan-700 dark:text-cyan-300">
+              Cổng Web cố định:
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleCopy('Cổng Web cố định', PUBLIC_WEB_PORTAL_URL)}
+                className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-cyan-700 hover:underline dark:text-cyan-200"
+              >
+                {PUBLIC_WEB_PORTAL_URL}
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openExternalLink(PUBLIC_WEB_PORTAL_URL)}
+                className="rounded-lg border border-cyan-500/30 p-1 text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-200"
+                title="Mở agypulse.dpdns.org"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
           {systemStatus && (
             <>
               {systemStatus.tunnel_short_url && (

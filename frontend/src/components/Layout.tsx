@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   Activity,
   Bot,
@@ -47,6 +47,7 @@ import type {
 } from '../types/api';
 import { useCustomTheme } from '../contexts/CustomThemeContext';
 import { CustomThemeModal } from './theme/CustomThemeModal';
+import { CommandSearch, QrShareCard, type CommandSearchItem } from './library';
 
 export interface LayoutProps {
   activeTab: TabKey;
@@ -90,11 +91,20 @@ export function Layout({
   children,
 }: LayoutProps) {
   const { config: themeConfig, preset, isThemeModalOpen, setThemeModalOpen, playTaskVoice } = useCustomTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
   const [auxPaneOpen, setAuxPaneOpen] = useState(false);
   const [auxTab, setAuxTab] = useState<'artifacts' | 'projects' | 'system'>('artifacts');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  const closeSidebarOnMobile = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   const selectedProject =
     projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
@@ -120,6 +130,7 @@ export function Layout({
 
   const handleStartNewConversation = () => {
     playTaskVoice();
+    closeSidebarOnMobile();
     if (onNewConversation) {
       onNewConversation();
     } else {
@@ -128,18 +139,104 @@ export function Layout({
     }
   };
 
+  const commandItems = useMemo<CommandSearchItem[]>(() => {
+    const actions: CommandSearchItem[] = [
+      {
+        id: 'cmd-new-chat',
+        kind: 'action',
+        title: 'New Conversation',
+        meta: 'Action',
+        onSelect: () => {
+          playTaskVoice();
+          if (onNewConversation) onNewConversation();
+          else {
+            onSelectRun?.('');
+            onTabChange('prompt');
+          }
+        },
+      },
+      {
+        id: 'cmd-custom-theme',
+        kind: 'action',
+        title: 'Custom Theme Studio',
+        meta: 'Theme',
+        onSelect: () => setThemeModalOpen(true),
+      },
+      {
+        id: 'cmd-automations',
+        kind: 'doc',
+        title: 'Automations & Tổng quan PC',
+        meta: 'Dashboard',
+        onSelect: () => onTabChange('dashboard'),
+      },
+      {
+        id: 'cmd-outputs',
+        kind: 'doc',
+        title: 'Outputs & Artifacts',
+        meta: 'Brain',
+        onSelect: () => onTabChange('outputs'),
+      },
+      {
+        id: 'cmd-settings',
+        kind: 'action',
+        title: 'Cài đặt hệ thống & Model',
+        meta: 'Settings',
+        onSelect: () => onTabChange('settings'),
+      },
+    ];
+
+    const projectItems: CommandSearchItem[] = projects.map((p) => ({
+      id: `proj-${p.id}`,
+      kind: 'project',
+      title: p.name,
+      meta: 'Project',
+      onSelect: () => {
+        onSelectProject?.(p.id);
+        onTabChange('projects');
+      },
+    }));
+
+    const runItems: CommandSearchItem[] = runs.slice(0, 12).map((r) => ({
+      id: `run-${r.id}`,
+      kind: 'chat',
+      title: r.prompt,
+      meta: r.project_name || 'Chat',
+      onSelect: () => {
+        onSelectRun?.(r.id);
+        onTabChange('prompt');
+      },
+    }));
+
+    return [...actions, ...projectItems, ...runItems];
+  }, [projects, runs, onNewConversation, onSelectProject, onSelectRun, onTabChange, playTaskVoice, setThemeModalOpen]);
+
   return (
-    <div className="agy-app-shell flex h-[100dvh] w-full flex-col overflow-hidden text-slate-100 select-none">
+    <div className="agy-app-shell flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden text-slate-100 select-none">
       {/* ============================================================== */}
-      {/* ANTIGRAVITY 2.0 DESKTOP TITLEBAR                               */}
+      {/* ANTIGRAVITY 2.0 DESKTOP TITLEBAR (Mobile Safe-Area Ready)      */}
       {/* ============================================================== */}
-      <header className="agy-glass-header relative z-30 flex h-10 shrink-0 items-center justify-between border-b border-white/10 bg-[#090b14]/85 px-2.5 backdrop-blur-xl sm:px-3 text-xs">
+      <header className="agy-glass-header pt-safe relative z-30 flex min-h-[46px] shrink-0 items-center justify-between gap-1.5 border-b border-white/10 bg-[#090b14]/85 px-2 backdrop-blur-xl sm:px-3 md:min-h-[40px] md:h-10 text-xs">
         {/* Left: Window Controls, Menu Bar, Project Selector */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+          {/* Sidebar Toggle Button (Prominent first on mobile) */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:hidden"
+            title="Đóng / mở menu"
+            aria-label="Đóng / mở menu"
+          >
+            {sidebarOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Menu className="h-4 w-4" />
+            )}
+          </button>
+
           {/* Antigravity Hexagon App Icon */}
           <div
             onClick={handleStartNewConversation}
-            className="group flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/25 transition hover:scale-105"
+            className="group flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/25 transition hover:scale-105"
             title="Antigravity 2.0"
           >
             <div className="flex h-full w-full items-center justify-center rounded-[6px] bg-[#0c1020]">
@@ -184,11 +281,11 @@ export function Layout({
             </button>
           </div>
 
-          {/* Sidebar Toggle Button */}
+          {/* Desktop Sidebar Toggle Button */}
           <button
             type="button"
             onClick={() => setSidebarOpen((prev) => !prev)}
-            className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
+            className="hidden md:flex rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
             title="Đóng / mở thanh bên"
           >
             {sidebarOpen ? (
@@ -199,21 +296,21 @@ export function Layout({
           </button>
 
           {/* Project Selector Trigger */}
-          <div className="relative">
+          <div className="relative min-w-0">
             <button
               type="button"
               data-testid="project-selector-trigger"
               onClick={() => setProjectDropdownOpen((o) => !o)}
-              className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10 hover:border-white/20"
+              className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 md:py-0.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10 hover:border-white/20"
             >
-              <FolderGit2 className="h-3 w-3 text-cyan-400" />
-              <span className="max-w-[120px] truncate">{selectedProject?.name || 'App'}</span>
-              <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+              <FolderGit2 className="h-3 w-3 shrink-0 text-cyan-400" />
+              <span className="max-w-[92px] sm:max-w-[120px] truncate">{selectedProject?.name || 'App'}</span>
+              <ChevronDown className="h-2.5 w-2.5 shrink-0 opacity-60" />
             </button>
 
             {projectDropdownOpen && (
               <div
-                className="absolute left-0 top-full mt-1.5 w-56 rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150"
+                className="absolute left-0 top-full mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -243,21 +340,27 @@ export function Layout({
           </div>
         </div>
 
-        {/* Center: Command Palette / Search Bar */}
+        {/* Center: Live Lucian #429 Command Palette / Search Bar */}
         <div className="hidden md:flex flex-1 max-w-sm mx-4">
-          <div className="flex h-6 w-full items-center justify-between rounded-md border border-white/10 bg-white/5 px-2.5 text-[11px] text-slate-400 shadow-inner hover:border-white/20 transition">
-            <span className="flex items-center gap-1.5">
-              <Search className="h-3 w-3" />
-              <span>Search or type a command...</span>
-            </span>
-            <kbd className="rounded bg-white/10 px-1 py-0.2 text-[9px] font-mono text-slate-300">
-              Ctrl+K
-            </kbd>
-          </div>
+          <CommandSearch
+            compact
+            items={commandItems}
+            placeholder="Search or type a command..."
+          />
         </div>
 
-        {/* Right: Custom Theme, Aux Pane, Mode, Window Controls */}
+        {/* Right: Mobile Search, Custom Theme, Aux Pane, Mode, Window Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Mobile Search Trigger */}
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:hidden"
+            title="Tìm kiếm lệnh & dự án"
+            aria-label="Tìm kiếm lệnh & dự án"
+          >
+            <Search className="h-4 w-4" />
+          </button>
           {/* Custom Theme Quick Pill */}
           <button
             type="button"
@@ -332,14 +435,42 @@ export function Layout({
       </header>
 
       {/* ============================================================== */}
-      {/* MAIN BODY: SIDEBAR + CANVAS + AUXILIARY PANE                  */}
+      {/* MAIN BODY: SIDEBAR (Drawer on mobile) + CANVAS + AUX PANE      */}
       {/* ============================================================== */}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-w-0 flex-1 overflow-hidden">
+        {/* Mobile Backdrop for Left Sidebar or Right Aux Pane */}
+        {(sidebarOpen || auxPaneOpen) && (
+          <div
+            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+            onClick={() => {
+              setSidebarOpen(false);
+              setAuxPaneOpen(false);
+            }}
+            aria-hidden="true"
+          />
+        )}
+
         {/* ============================================================ */}
-        {/* LEFT SIDEBAR (.bg-sidebar)                                  */}
+        {/* LEFT SIDEBAR (.bg-sidebar)                                   */}
         {/* ============================================================ */}
         {sidebarOpen && (
-          <aside className="agy-glass-sidebar z-20 flex w-64 shrink-0 flex-col border-r border-white/10 bg-[#0c0f1c]/80 backdrop-blur-xl">
+          <aside className="agy-glass-sidebar pb-safe fixed inset-y-0 left-0 z-40 flex w-[82vw] max-w-[288px] shrink-0 flex-col border-r border-white/10 bg-[#0c0f1c]/95 backdrop-blur-xl shadow-2xl md:static md:z-20 md:w-64 md:bg-[#0c0f1c]/80 md:shadow-none">
+            {/* Mobile Drawer Top Header */}
+            <div className="pt-safe flex items-center justify-between border-b border-white/10 px-3 py-2.5 md:hidden">
+              <span className="flex items-center gap-2 text-xs font-bold text-white">
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                Antigravity 2.0
+              </span>
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
+                aria-label="Đóng thanh bên"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
             {/* Top Action: + New Conversation */}
             <div className="p-3">
               <button
@@ -357,7 +488,7 @@ export function Layout({
                     <Plus className="h-4 w-4 text-cyan-400 transition-transform group-hover:rotate-90" />
                     <span>New Conversation</span>
                   </span>
-                  <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-mono text-slate-300">
+                  <kbd className="hidden sm:inline rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-mono text-slate-300">
                     Ctrl+N
                   </kbd>
                 </div>
@@ -368,9 +499,12 @@ export function Layout({
             <div className="px-2 space-y-0.5">
               <button
                 type="button"
-                onClick={() => onTabChange('dashboard')}
+                onClick={() => {
+                  onTabChange('dashboard');
+                  closeSidebarOnMobile();
+                }}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
+                  'flex w-full items-center justify-between rounded-lg px-2.5 py-2 md:py-1.5 text-xs font-medium transition',
                   activeTab === 'dashboard'
                     ? 'bg-white/15 text-white font-semibold'
                     : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
@@ -387,9 +521,12 @@ export function Layout({
 
               <button
                 type="button"
-                onClick={() => onTabChange('projects')}
+                onClick={() => {
+                  onTabChange('projects');
+                  closeSidebarOnMobile();
+                }}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition',
+                  'flex w-full items-center justify-between rounded-lg px-2.5 py-2 md:py-1.5 text-xs font-medium transition',
                   activeTab === 'projects'
                     ? 'bg-white/15 text-white font-semibold'
                     : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
@@ -404,8 +541,11 @@ export function Layout({
 
               <button
                 type="button"
-                onClick={() => setThemeModalOpen(true)}
-                className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition"
+                onClick={() => {
+                  setThemeModalOpen(true);
+                  closeSidebarOnMobile();
+                }}
+                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 md:py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition"
               >
                 <span className="flex items-center gap-2.5">
                   <Sparkles className="h-3.5 w-3.5 text-pink-400" />
@@ -451,6 +591,7 @@ export function Layout({
                       onClick={() => {
                         if (onSelectProject) onSelectProject(proj.id);
                         onTabChange('projects');
+                        closeSidebarOnMobile();
                       }}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition',
@@ -496,6 +637,7 @@ export function Layout({
                           onClick={() => {
                             if (onSelectRun) onSelectRun(r.id);
                             onTabChange('prompt');
+                            closeSidebarOnMobile();
                           }}
                           className={cn(
                             'group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition',
@@ -524,7 +666,10 @@ export function Layout({
               <div className="flex items-center justify-between text-[11px]">
                 <button
                   type="button"
-                  onClick={() => onTabChange('settings')}
+                  onClick={() => {
+                    onTabChange('settings');
+                    closeSidebarOnMobile();
+                  }}
                   className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition"
                 >
                   <Settings className="h-3.5 w-3.5" />
@@ -560,16 +705,16 @@ export function Layout({
         {/* ============================================================ */}
         <main
           data-main-content-body="true"
-          className="relative flex flex-1 flex-col overflow-y-auto"
+          className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
         >
           {children}
         </main>
 
         {/* ============================================================ */}
-        {/* RIGHT AUXILIARY PANE (Split view for files, artifacts, etc.) */}
+        {/* RIGHT AUXILIARY PANE (Drawer on mobile, split on desktop)    */}
         {/* ============================================================ */}
         {auxPaneOpen && (
-          <aside className="agy-glass-sidebar z-20 flex w-80 shrink-0 flex-col border-l border-white/10 bg-[#0c0f1c]/85 backdrop-blur-xl animate-in slide-in-from-right-10 duration-200">
+          <aside className="agy-glass-sidebar pt-safe pb-safe fixed inset-y-0 right-0 z-40 flex w-[86vw] max-w-[320px] shrink-0 flex-col border-l border-white/10 bg-[#0c0f1c]/95 backdrop-blur-xl shadow-2xl animate-in slide-in-from-right-10 duration-200 md:static md:z-20 md:w-80 md:bg-[#0c0f1c]/85 md:pt-0 md:shadow-none">
             {/* Header of Aux Pane */}
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs font-semibold">
               <div className="flex items-center gap-1">
@@ -643,18 +788,34 @@ export function Layout({
               )}
 
               {auxTab === 'system' && (
-                <div className="space-y-3 font-mono text-[11px]">
-                  <div>
-                    <span className="text-slate-500">Host:</span> {systemStatus?.hostname}
+                <div className="space-y-4">
+                  <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3 font-mono text-[11px]">
+                    <div>
+                      <span className="text-slate-500">Host:</span> {systemStatus?.hostname || 'Antigravity PC'}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Platform:</span> {systemStatus?.os_info || 'Windows'}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">LAN IP:</span> {systemStatus?.lan_ip || '127.0.0.1'}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Active Runs:</span> {activeRunCount}
+                    </div>
                   </div>
+
+                  {/* Lucian #478 Animated QR Pairing Card */}
                   <div>
-                    <span className="text-slate-500">Platform:</span> {systemStatus?.os_info}
-                  </div>
-                  <div>
-                    <span className="text-slate-500">LAN IP:</span> {systemStatus?.lan_ip}
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Active Runs:</span> {activeRunCount}
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Quét QR mở nhanh trên điện thoại
+                    </p>
+                    <QrShareCard
+                      url={
+                        systemStatus?.tunnel_url ||
+                        systemStatus?.lan_url ||
+                        (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4173')
+                      }
+                    />
                   </div>
                 </div>
               )}
@@ -662,6 +823,28 @@ export function Layout({
           </aside>
         )}
       </div>
+
+      {/* ============================================================== */}
+      {/* MOBILE COMMAND SEARCH OVERLAY (#429)                           */}
+      {/* ============================================================== */}
+      {mobileSearchOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/65 px-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden"
+          onClick={() => setMobileSearchOpen(false)}
+        >
+          <div
+            className="mx-auto w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CommandSearch
+              autoFocus
+              items={commandItems}
+              placeholder="Tìm lệnh, dự án, hội thoại..."
+              onClose={() => setMobileSearchOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ============================================================== */}
       {/* 1:1 CUSTOM THEME STUDIO MODAL (Opened by ⭐ Custom theme)      */}

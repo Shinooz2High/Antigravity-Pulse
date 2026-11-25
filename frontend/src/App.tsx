@@ -11,6 +11,7 @@ import {
   clearToken,
   getDeviceName,
   getServerUrl,
+  isRemoteWebHost,
   parsePairingInput,
   setDeviceName,
   setServerUrl,
@@ -239,7 +240,7 @@ export default function App() {
         return;
       }
 
-      if (isNativeApp() && !getServerUrl()) {
+      if ((isNativeApp() || isRemoteWebHost()) && !getServerUrl()) {
         if (!cancelled) {
           setAuthenticated(false);
           setBooting(false);

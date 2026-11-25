@@ -48,6 +48,17 @@ import type {
   TabKey,
 } from '../types/api';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import {
+  AgentTaskSteps,
+  FileUploadQueue,
+  GhostAutocompleteTextarea,
+  StreamingAgentAvatar,
+  StreamingCaret,
+  StreamingControlButton,
+  StreamingThinkingDots,
+  type AgentTaskStepItem,
+  type UploadQueueItem,
+} from '../components/library';
 
 interface PromptPageProps {
   projects: Project[];
@@ -72,6 +83,15 @@ const QUICK_PROMPTS = [
   'Kiểm tra git status, các thay đổi gần đây và cảnh báo lỗi',
   'Đọc mã nguồn và đề xuất phương án tối ưu hiệu năng',
   'Phân tích kiến trúc toàn diện và xuất báo cáo Markdown',
+];
+
+const EXTRA_AUTOCOMPLETE = [
+  'Sửa lỗi giao diện responsive trên điện thoại và kiểm tra lại',
+  'Viết unit test đầy đủ cho các module quan trọng trong dự án',
+  'Tối ưu hiệu năng build và giảm kích thước bundle frontend',
+  'Giải thích luồng hoạt động của hệ thống và vẽ sơ đồ Mermaid',
+  'Can we refactor this component for better readability and performance?',
+  'Check git diff and review all recent changes for potential bugs',
 ];
 
 export function PromptPage({
@@ -104,6 +124,7 @@ export function PromptPage({
   const [thoughtsOpen, setThoughtsOpen] = useState(true);
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadStatus, setUploadStatus] = useState<'ready' | 'uploading' | 'done' | 'error'>('ready');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,8 +183,10 @@ export function PromptPage({
     try {
       let attachmentIds: string[] = [];
       if (attachments.length > 0) {
+        setUploadStatus('uploading');
         const uploaded = await api.uploadFiles(attachments, selectedProject.id);
         attachmentIds = uploaded.map((u) => u.id);
+        setUploadStatus('done');
       }
 
       let finalPrompt = textToSend;
@@ -185,9 +208,11 @@ export function PromptPage({
       onSelectRun(created.id);
       setPromptText('');
       setAttachments([]);
+      setUploadStatus('ready');
       setThoughtsOpen(true);
       onNotify('Đã gửi câu lệnh tới Antigravity Agent trên PC', 'success');
     } catch (err) {
+      if (attachments.length > 0) setUploadStatus('error');
       onNotify(
         err instanceof Error ? err.message : 'Không thể khởi chạy prompt',
         'error'
@@ -221,15 +246,97 @@ export function PromptPage({
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
       setAttachments((prev) => [...prev, ...newFiles]);
+      setUploadStatus('ready');
       e.target.value = '';
     }
   };
+
+  const uploadQueueItems = useMemo<UploadQueueItem[]>(
+    () =>
+      attachments.map((file, idx) => ({
+        id: `${idx}-${file.name}-${file.size}`,
+        name: file.name,
+        size: file.size,
+        progress:
+          uploadStatus === 'done'
+            ? 1
+            : uploadStatus === 'uploading'
+              ? 0.65
+              : uploadStatus === 'error'
+                ? 0.4
+                : 0.15,
+        status: uploadStatus,
+      })),
+    [attachments, uploadStatus]
+  );
 
   const isRunning =
     activeRun &&
     (activeRun.status === 'running' ||
       activeRun.status === 'queued' ||
       activeRun.status === 'awaiting_approval');
+
+  const agentSteps = useMemo<AgentTaskStepItem[]>(() => {
+    if (!activeRun) return [];
+    const done = !isRunning;
+    const hasThoughts = Boolean(activeRun.thoughts?.trim());
+    const toolCount = activeRun.tool_calls?.length ?? 0;
+    const anyToolRunning = Boolean(
+      activeRun.tool_calls?.some(
+        (tc) => tc.status === 'running' || tc.status === 'pending'
+      )
+    );
+    const hasResponse = Boolean(activeRun.response_text?.trim());
+    const artCount = activeRun.output_artifacts?.length ?? 0;
+
+    return [
+      {
+        id: 'context',
+        label: 'Đọc ngữ cảnh dự án',
+        meta: activeRun.project_name || 'Workspace',
+        state: done || hasThoughts || toolCount > 0 || hasResponse ? 'done' : 'run',
+      },
+      {
+        id: 'plan',
+        label: 'Phân tích & lập kế hoạch',
+        meta: hasThoughts ? 'Thought stream' : 'Ready',
+        state:
+          done || toolCount > 0 || hasResponse
+            ? 'done'
+            : hasThoughts
+              ? 'run'
+              : 'wait',
+      },
+      {
+        id: 'tools',
+        label: toolCount > 0 ? 'Thực thi công cụ trên PC' : 'Xử lý yêu cầu Agent',
+        meta: toolCount > 0 ? `${toolCount} tools` : getEngineLabel(activeRun.engine_mode),
+        state: done
+          ? 'done'
+          : anyToolRunning
+            ? 'run'
+            : toolCount > 0 && hasResponse
+              ? 'done'
+              : toolCount > 0
+                ? 'run'
+                : 'wait',
+      },
+      {
+        id: 'finish',
+        label: 'Tổng hợp & xuất kết quả',
+        meta: artCount > 0 ? `${artCount} files` : activeRun.status === 'completed' ? 'OK' : activeRun.status,
+        state: done ? 'done' : hasResponse ? 'run' : 'wait',
+      },
+    ];
+  }, [activeRun, isRunning]);
+
+  const autocompleteSuggestions = useMemo(() => {
+    const historyPrompts = runs
+      .slice(0, 15)
+      .map((r) => r.prompt.trim())
+      .filter((p) => p.length > 4);
+    return Array.from(new Set([...QUICK_PROMPTS, ...EXTRA_AUTOCOMPLETE, ...historyPrompts]));
+  }, [runs]);
 
   // Format display model name
   const modelDisplayName =
@@ -242,29 +349,29 @@ export function PromptPage({
           : currentModel;
 
   return (
-    <div className="relative flex flex-1 flex-col justify-between overflow-hidden">
+    <div className="relative flex min-w-0 flex-1 flex-col justify-between overflow-hidden">
       {/* ============================================================== */}
-      {/* CONVERSATION CANVAS / EMPTY STATE GREETING                      */}
+      {/* CONVERSATION CANVAS / EMPTY STATE GREETING                     */}
       {/* ============================================================== */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-8 sm:py-6">
         {!activeRun ? (
           /* ========================================================== */
           /* EMPTY STATE: 1:1 CENTERED HANDWRITING GREETING (TAWA MALI) */
           /* ========================================================== */
-          <div className="mx-auto flex min-h-[55vh] max-w-3xl flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-500">
+          <div className="mx-auto flex min-h-[38vh] sm:min-h-[55vh] max-w-3xl flex-col items-center justify-center px-1 text-center animate-in fade-in zoom-in-95 duration-500">
             {/* Centered Handwritten Greeting in Mali Font */}
-            <h1 className="agy-mali-greeting text-3xl font-medium tracking-wide text-white drop-shadow-[0_2px_24px_rgba(183,164,255,0.7)] sm:text-4xl md:text-5xl">
+            <h1 className="agy-mali-greeting text-2xl font-medium leading-snug tracking-wide text-white drop-shadow-[0_2px_24px_rgba(183,164,255,0.7)] sm:text-4xl md:text-5xl">
               {greetingText || 'Tawa đã sẵn sàng rồi, hôm nay sensei muốn code gì nào'}
             </h1>
 
             {/* Subtitle with soft anime mascot hint */}
-            <p className="mt-4 flex items-center justify-center gap-2 text-xs font-medium text-slate-300 drop-shadow sm:text-sm">
-              <span className="text-pink-400">🌸</span>
+            <p className="mt-3 sm:mt-4 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 drop-shadow sm:text-sm">
+              <span className="shrink-0 text-pink-400">🌸</span>
               <span>Mọi hệ thống trên PC đã sẵn sàng, Sensei chỉ cần ra lệnh thôi nhé~</span>
             </p>
 
             {/* Quick Action Suggestion Chips */}
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-2.5 max-w-2xl">
+            <div className="mt-6 sm:mt-8 flex w-full max-w-2xl flex-wrap items-center justify-center gap-2 sm:gap-2.5">
               {QUICK_PROMPTS.map((prompt, idx) => (
                 <button
                   key={idx}
@@ -273,31 +380,31 @@ export function PromptPage({
                     setPromptText(prompt);
                     textareaRef.current?.focus();
                   }}
-                  className="group flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-4 py-2 text-xs text-slate-300 backdrop-blur-md transition hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:text-white hover:scale-[1.02]"
+                  className="group flex max-w-full items-start sm:items-center gap-2 rounded-2xl sm:rounded-full border border-white/10 bg-black/35 px-3.5 py-2 text-left sm:text-center text-xs text-slate-300 backdrop-blur-md transition hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:text-white active:scale-[0.98]"
                 >
-                  <Sparkles className="h-3 w-3 text-cyan-400 transition-transform group-hover:rotate-12" />
-                  <span>{prompt}</span>
+                  <Sparkles className="mt-0.5 sm:mt-0 h-3 w-3 shrink-0 text-cyan-400 transition-transform group-hover:rotate-12" />
+                  <span className="leading-snug">{prompt}</span>
                 </button>
               ))}
             </div>
           </div>
         ) : (
           /* ========================================================== */
-          /* ACTIVE RUN: CONVERSATION STREAM (USER BUBBLE + AGENT CARD)  */
+          /* ACTIVE RUN: CONVERSATION STREAM (USER BUBBLE + AGENT CARD) */
           /* ========================================================== */
-          <div className="mx-auto max-w-4xl space-y-6 pb-24">
-            {/* User Message Bubble with Double Border Frame */}
+          <div className="mx-auto max-w-4xl space-y-4 sm:space-y-6 pb-4">
+            {/* User Message Bubble with Double Border Frame (Lucian #086 pop) */}
             <div className="flex justify-end">
               <div
-                className="agy-user-bubble-frame max-w-[85%] rounded-2xl p-[1.5px] shadow-lg"
+                className="agy-user-bubble-frame u086-pop max-w-[92%] sm:max-w-[85%] rounded-2xl p-[1.5px] shadow-lg"
                 style={{
                   background:
                     'linear-gradient(135deg, var(--ct-primary, #38bdf8), var(--ct-secondary, #c084fc))',
                 }}
               >
-                <div className="rounded-[15px] bg-[#101426]/90 p-4 backdrop-blur-xl">
+                <div className="rounded-[15px] bg-[#101426]/90 p-3 sm:p-4 backdrop-blur-xl">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-500 text-[10px] font-bold text-white">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-500 text-[10px] font-bold text-white">
                       U
                     </div>
                     <span className="text-[11px] font-semibold text-slate-300">Sensei</span>
@@ -305,7 +412,7 @@ export function PromptPage({
                       • {formatClockTime(activeRun.created_at)}
                     </span>
                   </div>
-                  <p className="text-sm font-medium leading-relaxed text-white whitespace-pre-wrap">
+                  <p className="text-sm font-medium leading-relaxed text-white whitespace-pre-wrap break-words">
                     {activeRun.prompt}
                   </p>
 
@@ -330,14 +437,12 @@ export function PromptPage({
             {/* Agent Response Card */}
             <div
               data-testid="agent-response"
-              className="rounded-2xl border border-white/10 bg-[#0d1222]/80 p-5 shadow-xl backdrop-blur-xl"
+              className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1222]/80 p-3.5 sm:p-5 shadow-xl backdrop-blur-xl"
             >
               {/* Agent Header */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 text-white shadow-md shadow-indigo-500/30">
-                    <Sparkles className="h-4 w-4" />
-                  </div>
+                  <StreamingAgentAvatar isGenerating={Boolean(isRunning)} />
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-white">Antigravity Agent</span>
@@ -371,18 +476,26 @@ export function PromptPage({
                     );
                   })()}
 
-                  {isRunning && (
-                    <button
-                      type="button"
-                      disabled={cancelling}
-                      onClick={handleCancel}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition"
-                    >
-                      <Square className="h-3 w-3 fill-current" />
-                      <span>Dừng</span>
-                    </button>
-                  )}
+                  <StreamingControlButton
+                    isGenerating={Boolean(isRunning)}
+                    disabled={cancelling || submitting}
+                    onStop={handleCancel}
+                    onRegenerate={() => handleSendPrompt(activeRun.prompt)}
+                  />
                 </div>
+              </div>
+
+              {/* Lucian #454 Live Agent Task Steps Progress Card */}
+              <div className="mt-4">
+                <AgentTaskSteps
+                  steps={agentSteps}
+                  isDone={!isRunning}
+                  startedAt={activeRun.created_at}
+                  finishedAt={activeRun.finished_at || activeRun.created_at}
+                  workingLabel="Agent đang thực thi"
+                  doneLabel={activeRun.status === 'completed' ? 'Hoàn tất' : getPromptStatusInfo(activeRun.status).label}
+                  onReplay={() => handleSendPrompt(activeRun.prompt)}
+                />
               </div>
 
               {/* Error Banner if any */}
@@ -473,15 +586,13 @@ export function PromptPage({
                 {activeRun.response_text ? (
                   <div className="agy-markdown text-sm leading-relaxed text-slate-200">
                     <MarkdownRenderer content={activeRun.response_text} isDark={isDark} />
-                    {isRunning && (
-                      <span className="mt-1 inline-block h-4 w-2 animate-pulse bg-cyan-400" />
+                    {isRunning && <StreamingCaret />}
+                    {activeRun.status === 'cancelled' && (
+                      <span className="u086-stop">— Đã dừng tại đây</span>
                     )}
                   </div>
                 ) : isRunning ? (
-                  <div className="flex items-center gap-3 py-6 text-sm text-slate-400">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
-                    <span>Agent đang thao tác trên PC, vui lòng chờ trong giây lát...</span>
-                  </div>
+                  <StreamingThinkingDots label="Agent đang thao tác trên PC..." />
                 ) : (
                   <p className="text-xs text-slate-400 italic">
                     Phiên chạy đã kết thúc mà không có văn bản kết quả.
@@ -531,31 +642,31 @@ export function PromptPage({
       </div>
 
       {/* ============================================================== */}
-      {/* 1:1 AUTHENTIC ANTIGRAVITY .surface-composer                     */}
+      {/* 1:1 AUTHENTIC ANTIGRAVITY .surface-composer (Mobile Safe-Area) */}
       {/* ============================================================== */}
-      <div className="relative z-20 shrink-0 px-4 pb-4 pt-1 sm:px-8">
+      <div className="relative z-20 shrink-0 px-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-8 sm:pb-4">
         <div className="mx-auto max-w-4xl">
           {/* Double Border Frame Outer (Styled by Theme Customizer) */}
           <div className="agy-composer-frame-outer shadow-2xl">
             {/* Inner Composer Card */}
-            <div className="agy-composer-frame-inner surface-composer-card p-3 sm:p-3.5">
+            <div className="agy-composer-frame-inner surface-composer-card p-2.5 sm:p-3.5">
               {/* TOP ROW: Workspace & Context Pills */}
-              <div className="flex items-center gap-2 pb-2 text-[11px] font-semibold text-slate-300">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pb-2 text-[11px] font-semibold text-slate-300">
                 {/* Project Selector Trigger */}
-                <div className="relative">
+                <div className="relative max-w-full">
                   <button
                     type="button"
                     onClick={() => setProjectMenuOpen((o) => !o)}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-slate-200 hover:bg-white/10 hover:border-white/20 transition"
+                    className="flex max-w-full items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 sm:px-2.5 py-1 text-slate-200 hover:bg-white/10 hover:border-white/20 transition"
                   >
-                    <FolderGit2 className="h-3 w-3 text-cyan-400" />
-                    <span>{selectedProject?.name || 'No Project'}</span>
-                    <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                    <FolderGit2 className="h-3 w-3 shrink-0 text-cyan-400" />
+                    <span className="max-w-[120px] sm:max-w-[200px] truncate">{selectedProject?.name || 'No Project'}</span>
+                    <ChevronDown className="h-2.5 w-2.5 shrink-0 opacity-60" />
                   </button>
 
                   {projectMenuOpen && (
                     <div
-                      className="absolute bottom-full left-0 mb-2 w-52 rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50"
+                      className="absolute bottom-full left-0 mb-2 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -597,72 +708,68 @@ export function PromptPage({
                 </span>
               </div>
 
-              {/* ATTACHMENTS LIST IF ANY */}
-              {attachments.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {attachments.map((file, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-2.5 py-1 text-xs text-slate-200"
-                    >
-                      <Paperclip className="h-3 w-3 text-cyan-400" />
-                      <span className="max-w-[150px] truncate">{file.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="text-slate-400 hover:text-white"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
+              {/* ATTACHMENTS QUEUE (Lucian #075 Collapsible Upload Panel) */}
+              {uploadQueueItems.length > 0 && (
+                <div className="mb-2.5">
+                  <FileUploadQueue
+                    items={uploadQueueItems}
+                    onRemove={(id) => {
+                      const idx = parseInt(id.split('-')[0], 10);
+                      if (!Number.isNaN(idx)) {
+                        setAttachments((prev) => prev.filter((_, i) => i !== idx));
+                      }
+                    }}
+                    onRetry={() => handleSendPrompt()}
+                  />
                 </div>
               )}
 
-              {/* MIDDLE ROW: TEXTAREA */}
+              {/* MIDDLE ROW: LUCIAN #456 INLINE GHOST AUTOCOMPLETE TEXTAREA */}
               <div className="relative">
-                <textarea
-                  ref={textareaRef}
+                <GhostAutocompleteTextarea
+                  textareaRef={textareaRef}
                   value={promptText}
-                  onChange={(e) => setPromptText(e.target.value)}
+                  onChange={setPromptText}
                   onKeyDown={handleKeyDown}
+                  suggestions={autocompleteSuggestions}
                   rows={2}
-                  placeholder="Ask anything, @ to mention, / for actions... (Enter để gửi)"
-                  className="w-full resize-none bg-transparent px-1 py-1 text-sm text-white placeholder-slate-400 outline-none leading-relaxed"
+                  placeholder="Ask anything, @ to mention, / for actions... (Tab nhận gợi ý · Enter để gửi)"
                   disabled={submitting}
                 />
               </div>
 
               {/* BOTTOM TOOLBAR ROW */}
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2.5">
+              <div className="mt-2 flex items-center justify-between gap-1.5 sm:gap-2 border-t border-white/10 pt-2">
                 {/* Left: Model Selector, Turbo, Action Mode */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   {/* Model Selector Pill */}
                   <button
                     type="button"
                     onClick={() => setIsModelModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-white/10 hover:border-cyan-400/50"
+                    className="flex min-w-0 items-center gap-1 sm:gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-slate-200 transition hover:bg-white/10 hover:border-cyan-400/50"
                   >
-                    <span className="text-cyan-400 font-bold">+</span>
-                    <span>{modelDisplayName}</span>
-                    <ChevronDown className="h-3 w-3 opacity-60" />
+                    <span className="shrink-0 text-cyan-400 font-bold">+</span>
+                    <span className="max-w-[108px] sm:max-w-none truncate">{modelDisplayName}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
                   </button>
 
                   {/* Mode Pill (Turbo / Deep) */}
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <button
                       type="button"
                       onClick={() => setModeMenuOpen((o) => !o)}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+                      className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-slate-200 transition hover:bg-white/10"
                     >
-                      <Zap className="h-3 w-3 text-amber-400" />
-                      <span>{selectedActionMode === 'run_agent' ? '⚡ Turbo' : selectedActionMode === 'code_review' ? 'Code Review' : 'Deep Research'}</span>
-                      <ChevronDown className="h-3 w-3 opacity-60" />
+                      <Zap className="h-3 w-3 shrink-0 text-amber-400" />
+                      <span className="hidden xs:inline sm:inline">
+                        {selectedActionMode === 'run_agent' ? 'Turbo' : selectedActionMode === 'code_review' ? 'Review' : 'Research'}
+                      </span>
+                      <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
                     </button>
 
                     {modeMenuOpen && (
                       <div
-                        className="absolute bottom-full left-0 mb-2 w-48 rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50"
+                        className="absolute bottom-full left-0 mb-2 w-48 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button

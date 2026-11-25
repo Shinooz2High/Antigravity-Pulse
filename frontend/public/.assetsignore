@@ -1,0 +1,2 @@
+# Exclude large user media (>25 MiB) that exceeds Cloudflare Workers Static Assets limit
+theme-assets/user_media/*.mp4

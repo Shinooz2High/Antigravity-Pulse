@@ -93,50 +93,51 @@ export function CustomThemeModal() {
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between gap-3 border-b px-5 py-4"
+          className="flex items-center justify-between gap-2 border-b px-3.5 py-3 sm:gap-3 sm:px-5 sm:py-4"
           style={{ borderColor: preset.borderColor }}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border"
+              className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-2xl border"
               style={{
                 background: `linear-gradient(135deg, ${preset.primary}28, ${preset.secondary}20)`,
                 borderColor: preset.borderColor,
                 color: preset.primary,
               }}
             >
-              <Sparkles className="h-5 w-5" />
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm sm:text-base font-bold text-white">
                 Custom Theme Studio
               </h2>
-              <p className="text-xs text-slate-400">
-                Live Video Wallpaper · 11 Composer Styles · Starfield Boot &amp; Tawa Voice
+              <p className="truncate text-[11px] sm:text-xs text-slate-400">
+                Live Video Wallpaper · 11 Composer Styles · Tawa Voice
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => {
                 setThemeModalOpen(false);
                 replayBootIntro();
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110"
+              className="inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-semibold text-white transition hover:brightness-110"
               style={{
                 background: `linear-gradient(135deg, ${preset.primary}35, ${preset.secondary}22)`,
                 borderColor: preset.borderColor,
               }}
             >
-              <Play className="h-3.5 w-3.5" />
-              Phát lại màn xuất hiện
+              <Play className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">Phát lại màn xuất hiện</span>
+              <span className="sm:hidden">Intro</span>
             </button>
             <button
               type="button"
               onClick={() => setThemeModalOpen(false)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white"
               aria-label="Đóng"
             >
               <X className="h-5 w-5" />
@@ -145,7 +146,7 @@ export function CustomThemeModal() {
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 space-y-6 overflow-y-auto p-5 text-slate-100">
+        <div className="flex-1 space-y-5 overflow-y-auto p-3.5 sm:space-y-6 sm:p-5 text-slate-100">
           {/* 1. Theme Presets */}
           <section>
             <div className="mb-3 flex items-center justify-between">
