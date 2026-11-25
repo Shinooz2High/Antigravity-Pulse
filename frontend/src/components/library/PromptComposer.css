@@ -1,0 +1,301 @@
+/* PromptComposer Component Styles */
+
+.pc-root {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.pc-root *, .pc-root *::before, .pc-root *::after {
+  box-sizing: border-box;
+}
+
+/* Theme containers */
+.pc-theme-light {
+  --pc-bg: #FFFFFF;
+  --pc-bg-subtle: #F8FAFC;
+  --pc-border: rgba(15, 23, 42, 0.1);
+  --pc-border-focus: #6A57F2;
+  --pc-text: #0F172A;
+  --pc-text-muted: #64748B;
+  --pc-text-subtle: #94A3B8;
+  --pc-chip-bg: #F1F5F9;
+  --pc-chip-hover: #E2E8F0;
+  --pc-dropdown-bg: #FFFFFF;
+  --pc-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.08);
+  --pc-shadow-focus: 0 14px 34px -10px rgba(106, 87, 242, 0.18), 0 0 0 2px #6A57F2;
+}
+
+.pc-theme-dark {
+  --pc-bg: #111827;
+  --pc-bg-subtle: #1E293B;
+  --pc-border: rgba(148, 163, 184, 0.14);
+  --pc-border-focus: #B7A4FF;
+  --pc-text: #F8FAFC;
+  --pc-text-muted: #94A3B8;
+  --pc-text-subtle: #64748B;
+  --pc-chip-bg: #1F293D;
+  --pc-chip-hover: #29354E;
+  --pc-dropdown-bg: #172033;
+  --pc-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --pc-shadow-focus: 0 18px 40px -12px rgba(183, 164, 255, 0.22), 0 0 0 2px #B7A4FF;
+}
+
+/* Chips bar */
+.pc-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+.pc-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.pc-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pc-chip-bg);
+  color: var(--pc-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pc-chip:hover {
+  background: var(--pc-chip-hover);
+  color: var(--pc-text);
+  transform: translateY(-1px);
+}
+
+/* Main Box */
+.pc-box {
+  position: relative;
+  border-radius: 20px;
+  background: var(--pc-bg);
+  box-shadow: var(--pc-shadow);
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: visible;
+}
+
+.pc-box.is-focused {
+  box-shadow: var(--pc-shadow-focus);
+}
+
+/* Attachments preview list */
+.pc-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 14px 0;
+}
+
+.pc-attachment-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px 0 10px;
+  border-radius: 8px;
+  background: var(--pc-bg-subtle);
+  border: 1px solid var(--pc-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pc-text);
+}
+
+.pc-attachment-remove {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--pc-text-muted);
+  cursor: pointer;
+}
+.pc-attachment-remove:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+}
+
+/* Textarea input */
+.pc-textarea {
+  display: block;
+  width: 100%;
+  min-height: 54px;
+  max-height: 240px;
+  padding: 14px 16px 8px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pc-text);
+  resize: none;
+  outline: none;
+}
+.pc-textarea::placeholder {
+  color: var(--pc-text-subtle);
+}
+
+/* Toolbar */
+.pc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--pc-border);
+}
+
+.pc-toolbar-left, .pc-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Action button inside toolbar */
+.pc-tool-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--pc-border);
+  border-radius: 10px;
+  background: var(--pc-bg-subtle);
+  color: var(--pc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pc-tool-btn:hover {
+  background: var(--pc-chip-hover);
+  color: var(--pc-text);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.pc-tool-btn.is-active {
+  color: var(--pc-border-focus);
+  border-color: var(--pc-border-focus);
+}
+
+.pc-icon-btn {
+  width: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Dropdown Menu */
+.pc-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--pc-dropdown-bg);
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--pc-border);
+  z-index: 100;
+  animation: pc-slide-up 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes pc-slide-up {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pc-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pc-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.pc-dropdown-item:hover, .pc-dropdown-item.is-selected {
+  background: var(--pc-chip-hover);
+}
+.pc-dropdown-item.is-selected {
+  color: var(--pc-border-focus);
+}
+
+.pc-dropdown-item-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(106, 87, 242, 0.12);
+  color: var(--pc-border-focus);
+}
+
+/* Send Button */
+.pc-send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6A57F2 0%, #3B82F6 100%);
+  color: #FFFFFF;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px -3px rgba(106, 87, 242, 0.45);
+  transition: all 0.2s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+.pc-send-btn:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 6px 18px -3px rgba(106, 87, 242, 0.6);
+}
+.pc-send-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.pc-send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.pc-send-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 640px) {
+  .pc-textarea {
+    font-size: 16px; /* Prevents auto zoom in iOS Safari */
+  }
+  .pc-send-text {
+    display: none;
+  }
+}

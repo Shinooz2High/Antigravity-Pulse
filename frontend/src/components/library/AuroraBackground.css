@@ -1,0 +1,64 @@
+/* Lucian UX/UI Prompt #319 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#319 */
+
+.u319-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background: #050B1F;
+}
+
+.u319-wrap canvas {
+  position: absolute;
+  inset: -10%;
+  width: 120%;
+  height: 120%;
+  filter: blur(24px) saturate(1.2);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.u319-grain {
+  position: absolute;
+  inset: 0;
+  opacity: .14;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.u319-palette-picker {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .12);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.u319-palette-btn {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px transparent;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.u319-palette-btn[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px #fff;
+  transform: scale(1.1);
+}
+
+.u319-inner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+}

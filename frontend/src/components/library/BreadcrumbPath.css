@@ -1,0 +1,118 @@
+/* Lucian UX/UI Prompt #103 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#103 */
+
+.u103 {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.u103 button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+}
+
+.u103 nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.u103 nav button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 500;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+
+.dark .u103 nav button {
+  color: #94a3b8;
+}
+
+.u103 nav button:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #0f172a;
+}
+.dark .u103 nav button:hover {
+  color: #ffffff;
+}
+
+.u103 nav button[aria-current="page"] {
+  font-weight: 700;
+  color: #06b6d4;
+  background: rgba(6, 182, 212, 0.1);
+}
+
+.dark .u103 nav button[aria-current="page"] {
+  color: #22d3ee;
+  background: rgba(6, 182, 212, 0.16);
+}
+
+.u103 nav button:focus-visible {
+  outline: 2px solid #06b6d4;
+  outline-offset: 2px;
+}
+
+.u103 nav span.u103-sep {
+  color: #94a3b8;
+  user-select: none;
+  font-size: 12px;
+}
+
+.u103 .places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.u103 .place {
+  flex: 0 1 auto;
+  min-width: 100px;
+  max-width: 180px;
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #ffffff;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  transition: all 0.18s cubic-bezier(.34, 1.45, .64, 1);
+}
+
+.dark .u103 .place {
+  background: #111827;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.u103 .place:hover {
+  border-color: #06b6d4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -3px rgba(6, 182, 212, 0.25);
+}
+
+.u103 .place:active {
+  transform: scale(.97);
+}
+
+.u103 .place span.icon {
+  font-size: 14px;
+  color: #06b6d4;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u103 .place { transition: none !important; }
+}

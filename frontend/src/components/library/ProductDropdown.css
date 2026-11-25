@@ -1,0 +1,183 @@
+/* Lucian UX/UI Prompt #413 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#413 */
+
+.u413-container {
+  position: relative;
+  display: inline-block;
+}
+
+.u413-tr {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px 0 16px;
+  border: 0;
+  border-radius: 99px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1), 0 1px 3px rgba(15, 23, 42, 0.08);
+  font-size: 13px;
+  font-weight: 650;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dark .u413-tr {
+  background: #111827;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.u413-tr:hover, .u413-tr[aria-expanded="true"] {
+  background: #f1f5f9;
+}
+.dark .u413-tr:hover, .dark .u413-tr[aria-expanded="true"] {
+  background: #1e293b;
+}
+
+.u413-tr svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .7;
+  transition: transform .45s cubic-bezier(.34, 1.45, .64, 1);
+}
+.u413-tr[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.u413-pn {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  width: 260px;
+  padding: 6px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 
+    0 0 0 1px rgba(15, 23, 42, 0.1),
+    0 20px 40px -15px rgba(15, 23, 42, 0.25);
+  transform-origin: 20% -10px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px) scale(.92);
+  transition: opacity .15s ease, transform .2s ease, visibility 0s .2s;
+  z-index: 100;
+}
+
+.dark .u413-pn {
+  background: #111827;
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 24px 50px -15px rgba(0, 0, 0, 0.65);
+}
+
+.u413-container.is-open .u413-pn {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity .2s ease, transform .45s cubic-bezier(.25, 1.45, .45, 1), visibility 0s;
+}
+
+.u413-hl {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 0;
+  height: 50px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  opacity: 0;
+  transform: translateY(var(--hy, 6px));
+  transition: transform .35s cubic-bezier(.3, 1.35, .5, 1), opacity .15s;
+  pointer-events: none;
+}
+.dark .u413-hl {
+  background: #1e293b;
+}
+
+.u413-pn.is-hl .u413-hl {
+  opacity: 1;
+}
+
+.u413-ls {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.u413-it {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 50px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: #0f172a;
+  text-decoration: none;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.dark .u413-it {
+  color: #f8fafc;
+}
+
+.u413-ic {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--c1, #e0e7ff);
+  color: var(--c2, #4f46e5);
+  transition: transform .35s cubic-bezier(.34, 1.45, .64, 1);
+}
+.u413-it.is-on .u413-ic {
+  transform: scale(1.1) rotate(-4deg);
+}
+.u413-ic svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.u413-it b {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.u413-it small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: #64748b;
+}
+.dark .u413-it small {
+  color: #94a3b8;
+}
+
+.u413-c1 { --c1: #e0e7ff; --c2: #4f46e5; }
+.dark .u413-c1 { --c1: rgba(99, 102, 241, 0.2); --c2: #818cf8; }
+
+.u413-c2 { --c1: #e0f2fe; --c2: #0284c7; }
+.dark .u413-c2 { --c1: rgba(14, 165, 233, 0.2); --c2: #38bdf8; }
+
+.u413-c3 { --c1: #fef3c7; --c2: #d97706; }
+.dark .u413-c3 { --c1: rgba(245, 158, 11, 0.2); --c2: #fbbf24; }
+
+.u413-c4 { --c1: #d1fae5; --c2: #059669; }
+.dark .u413-c4 { --c1: rgba(16, 185, 129, 0.2); --c2: #34d399; }

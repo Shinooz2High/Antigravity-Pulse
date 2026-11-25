@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Backend local runtime state (contains PINs, tokens, API keys, run outputs)
+backend/data/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+*.local
+
+# Environment & OS
+.env
+.env.*.local
+.DS_Store
+Thumbs.db
+*.log
+
+# Third-party binaries (install via winget install Cloudflare.cloudflared)
+cloudflared.exe

@@ -1,0 +1,1075 @@
+"""Prompt execution queue, Antigravity SDK / CLI / Demo runners, uploads, and mobile approvals."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import secrets
+import shutil
+import threading
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote
+
+from fastapi import HTTPException, UploadFile
+
+from ..config import AppConfig
+from ..models import (
+    ArtifactItem,
+    AttachmentItem,
+    EngineMode,
+    ExecutionPolicy,
+    FileContentResponse,
+    PendingApproval,
+    PromptRun,
+    PromptToolCall,
+)
+from ..utils import (
+    atomic_write_json,
+    classify_file,
+    read_json_file,
+    read_text_preview,
+    safe_jail_path,
+    timestamp_to_iso,
+    utc_now_iso,
+)
+from .project_service import ProjectService
+from .settings_service import SettingsService
+from .ws_manager import WebSocketManager
+
+logger = logging.getLogger(__name__)
+
+SAFE_READONLY_CLI_PREFIXES = (
+    "git status",
+    "git log",
+    "git diff",
+    "git branch",
+    "git show",
+    "dir",
+    "ls",
+    "pwd",
+    "whoami",
+    "python --version",
+    "node --version",
+)
+
+
+class RunnerService:
+    """Orchestrates per-project FIFO prompt runs across Antigravity SDK, CLI, and Demo engines."""
+
+    def __init__(
+        self,
+        config: AppConfig,
+        settings: SettingsService,
+        project_service: ProjectService,
+        ws_manager: WebSocketManager,
+    ) -> None:
+        self.config = config
+        self.settings = settings
+        self.project_service = project_service
+        self.ws_manager = ws_manager
+
+        self.runs_dir = config.data_dir / "runs"
+        self.uploads_dir = config.data_dir / "uploads"
+        self.runs_index_path = config.data_dir / "runs_index.json"
+        self.uploads_index_path = config.data_dir / "uploads_index.json"
+
+        self._lock = threading.RLock()
+        self._runs: dict[str, PromptRun] = {}
+        self._run_order: list[str] = []
+        self._uploads: dict[str, dict[str, Any]] = {}
+
+        self._queues: dict[str, asyncio.Queue[str]] = {}
+        self._workers: dict[str, asyncio.Task[None]] = {}
+        self._active_tasks: dict[str, asyncio.Task[None]] = {}
+        self._active_chat_responses: dict[str, Any] = {}
+        self._active_procs: dict[str, asyncio.subprocess.Process] = {}
+        self._cancelled_runs: set[str] = set()
+
+        self._approvals: dict[str, tuple[PendingApproval, asyncio.Future[bool]]] = {}
+        self._started = False
+
+        self._load_persisted()
+
+    def _load_persisted(self) -> None:
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        self.uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        raw_uploads = read_json_file(self.uploads_index_path, default={})
+        if isinstance(raw_uploads, dict):
+            self._uploads = raw_uploads
+
+        raw_runs = read_json_file(self.runs_index_path, default=[])
+        if isinstance(raw_runs, list):
+            for item in raw_runs:
+                if not isinstance(item, dict) or "id" not in item:
+                    continue
+                try:
+                    run = PromptRun.model_validate(item)
+                    if run.status in {"queued", "running", "awaiting_approval"}:
+                        run.status = "failed"
+                        run.error = run.error or "Server restarted while run was in progress."
+                        run.finished_at = run.finished_at or utc_now_iso()
+                    self._runs[run.id] = run
+                    self._run_order.append(run.id)
+                except Exception:
+                    continue
+
+    def _save_runs(self) -> None:
+        with self._lock:
+            payload = [self._runs[rid].model_dump() for rid in self._run_order if rid in self._runs]
+            # Keep newest 200 persisted runs
+            if len(payload) > 200:
+                payload = payload[-200:]
+        atomic_write_json(self.runs_index_path, payload)
+
+    def _save_uploads(self) -> None:
+        with self._lock:
+            payload = dict(self._uploads)
+        atomic_write_json(self.uploads_index_path, payload)
+
+    def start(self) -> None:
+        self._started = True
+
+    async def stop(self) -> None:
+        self._started = False
+        for approval_id, (_, fut) in list(self._approvals.items()):
+            if not fut.done():
+                fut.cancel()
+        self._approvals.clear()
+
+        for run_id, task in list(self._active_tasks.items()):
+            self._cancelled_runs.add(run_id)
+            task.cancel()
+
+        for proc in list(self._active_procs.values()):
+            if proc.returncode is None:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+
+        for worker in list(self._workers.values()):
+            worker.cancel()
+
+        if self._workers:
+            await asyncio.gather(*self._workers.values(), return_exceptions=True)
+        self._workers.clear()
+        self._queues.clear()
+
+    # --- Uploads ---
+
+    async def save_uploads(
+        self,
+        files: list[UploadFile],
+        project_id: str | None = None,
+    ) -> list[AttachmentItem]:
+        del project_id
+        results: list[AttachmentItem] = []
+        for f in files:
+            att_id = f"att_{secrets.token_hex(6)}"
+            orig_name = Path(f.filename or "upload.bin").name or "upload.bin"
+            safe_name = orig_name.replace("\x00", "_")
+            dest_dir = (self.uploads_dir / att_id).resolve()
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = (dest_dir / safe_name).resolve()
+            if not dest_path.is_relative_to(dest_dir):
+                raise HTTPException(status_code=400, detail="Invalid uploaded filename")
+
+            data = await f.read()
+            dest_path.write_bytes(data)
+
+            _, detected_mime = classify_file(dest_path)
+            mime_type = f.content_type or detected_mime
+            rel_path = f"{att_id}/{safe_name}"
+            raw_url = f"/api/prompts/upload-raw/{att_id}"
+
+            item = AttachmentItem(
+                id=att_id,
+                name=safe_name,
+                rel_path=rel_path,
+                mime_type=mime_type,
+                size=len(data),
+                raw_url=raw_url,
+            )
+            with self._lock:
+                self._uploads[att_id] = {
+                    **item.model_dump(),
+                    "disk_path": str(dest_path),
+                }
+            results.append(item)
+
+        self._save_uploads()
+        return results
+
+    def resolve_upload_raw(self, attachment_id: str) -> tuple[Path, str, str]:
+        with self._lock:
+            rec = self._uploads.get(attachment_id)
+        if not rec:
+            raise HTTPException(status_code=404, detail=f"Attachment '{attachment_id}' not found")
+        disk_path = Path(str(rec["disk_path"])).resolve()
+        if not disk_path.is_file() or not disk_path.is_relative_to(self.uploads_dir.resolve()):
+            raise HTTPException(status_code=404, detail="Uploaded file missing on disk")
+        return disk_path, str(rec["name"]), str(rec["mime_type"])
+
+    def _get_attachments(self, attachment_ids: list[str]) -> list[tuple[AttachmentItem, Path]]:
+        items: list[tuple[AttachmentItem, Path]] = []
+        with self._lock:
+            for att_id in attachment_ids:
+                rec = self._uploads.get(att_id)
+                if not rec:
+                    raise HTTPException(status_code=400, detail=f"Unknown attachment_id: {att_id}")
+                disk_path = Path(str(rec["disk_path"])).resolve()
+                item = AttachmentItem(
+                    id=str(rec["id"]),
+                    name=str(rec["name"]),
+                    rel_path=str(rec["rel_path"]),
+                    mime_type=str(rec["mime_type"]),
+                    size=int(rec["size"]),
+                    raw_url=str(rec["raw_url"]),
+                )
+                items.append((item, disk_path))
+        return items
+
+    # --- Queue & Run Queries ---
+
+    async def enqueue_run(
+        self,
+        *,
+        project_id: str,
+        prompt: str,
+        engine_mode: EngineMode | None = None,
+        execution_policy: ExecutionPolicy | None = None,
+        attachment_ids: list[str] | None = None,
+        device_name: str | None = None,
+    ) -> PromptRun:
+        clean_prompt = (prompt or "").strip()
+        if not clean_prompt:
+            raise HTTPException(status_code=400, detail="Prompt must not be empty")
+
+        project = self.project_service.get_project(project_id)
+        if not project.exists:
+            raise HTTPException(status_code=400, detail=f"Project folder does not exist: {project.path}")
+
+        attachments_with_paths = self._get_attachments(attachment_ids or [])
+        attachments = [item for item, _ in attachments_with_paths]
+
+        effective_engine: EngineMode = engine_mode or project.engine_mode or self.settings.get_default_engine_mode()
+        effective_policy: ExecutionPolicy = (
+            execution_policy or project.execution_policy or self.settings.get_default_execution_policy()
+        )
+
+        run_id = f"run_{secrets.token_hex(6)}"
+        run = PromptRun(
+            id=run_id,
+            project_id=project.id,
+            project_name=project.name,
+            prompt=clean_prompt,
+            engine_mode=effective_engine,
+            execution_policy=effective_policy,
+            status="queued",
+            attachments=attachments,
+            created_at=utc_now_iso(),
+            device_name=device_name,
+        )
+
+        with self._lock:
+            self._runs[run_id] = run
+            self._run_order.append(run_id)
+        self._save_runs()
+        self.project_service.touch_activity(project.id)
+
+        await self.ws_manager.broadcast("prompt.created", {"run": run.model_dump()})
+
+        if project.id not in self._queues:
+            self._queues[project.id] = asyncio.Queue()
+        await self._queues[project.id].put(run_id)
+
+        worker = self._workers.get(project.id)
+        if worker is None or worker.done():
+            self._workers[project.id] = asyncio.create_task(self._project_worker(project.id))
+
+        return run
+
+    def list_runs(
+        self,
+        *,
+        project_id: str | None = None,
+        limit: int = 50,
+    ) -> tuple[list[PromptRun], list[PendingApproval]]:
+        with self._lock:
+            ordered = [self._runs[rid] for rid in reversed(self._run_order) if rid in self._runs]
+            if project_id:
+                ordered = [r for r in ordered if r.project_id == project_id]
+            runs = [r.model_copy(deep=True) for r in ordered[:limit]]
+            approvals = [
+                pending.model_copy(deep=True)
+                for pending, _ in self._approvals.values()
+                if not project_id or self._runs.get(pending.run_id, None) and self._runs[pending.run_id].project_id == project_id
+            ]
+        return runs, approvals
+
+    def get_run(self, run_id: str) -> PromptRun:
+        with self._lock:
+            run = self._runs.get(run_id)
+            if not run:
+                raise HTTPException(status_code=404, detail=f"Prompt run '{run_id}' not found")
+            return run.model_copy(deep=True)
+
+    async def cancel_run(self, run_id: str) -> None:
+        run = self.get_run(run_id)
+        if run.status in {"completed", "failed", "cancelled"}:
+            return
+
+        self._cancelled_runs.add(run_id)
+
+        # Resolve any waiting approvals for this run
+        for approval_id, (pending, fut) in list(self._approvals.items()):
+            if pending.run_id == run_id:
+                self._approvals.pop(approval_id, None)
+                if not fut.done():
+                    fut.set_result(False)
+                await self.ws_manager.broadcast(
+                    "prompt.approval_resolved",
+                    {"approval_id": approval_id, "run_id": run_id, "approved": False},
+                )
+
+        # Cancel active SDK chat response or subprocess
+        chat_resp = self._active_chat_responses.get(run_id)
+        if chat_resp is not None:
+            try:
+                await chat_resp.cancel()
+            except Exception:
+                pass
+
+        proc = self._active_procs.get(run_id)
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+        task = self._active_tasks.get(run_id)
+        if task is not None and not task.done():
+            task.cancel()
+
+        if run.status == "queued":
+            await self._finalize_run(run_id, "cancelled", error=None)
+
+    async def resolve_approval(self, *, run_id: str, approval_id: str, approved: bool) -> None:
+        entry = self._approvals.get(approval_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Pending approval '{approval_id}' not found")
+        pending, fut = entry
+        if pending.run_id != run_id:
+            raise HTTPException(status_code=400, detail="Approval does not belong to this run")
+
+        self._approvals.pop(approval_id, None)
+        if not fut.done():
+            fut.set_result(bool(approved))
+
+        await self.ws_manager.broadcast(
+            "prompt.approval_resolved",
+            {"approval_id": approval_id, "run_id": run_id, "approved": bool(approved)},
+        )
+
+    async def _request_mobile_approval(
+        self,
+        *,
+        run_id: str,
+        project_name: str,
+        tool_name: str,
+        description: str,
+        args: dict[str, Any],
+    ) -> bool:
+        if run_id in self._cancelled_runs:
+            return False
+
+        approval_id = f"apr_{secrets.token_hex(6)}"
+        pending = PendingApproval(
+            approval_id=approval_id,
+            run_id=run_id,
+            project_name=project_name,
+            tool_name=tool_name,
+            description=description,
+            args=args,
+            created_at=utc_now_iso(),
+        )
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[bool] = loop.create_future()
+        self._approvals[approval_id] = (pending, fut)
+
+        with self._lock:
+            run = self._runs[run_id]
+            run.status = "awaiting_approval"
+        self._save_runs()
+
+        await self.ws_manager.broadcast(
+            "prompt.status",
+            {"run_id": run_id, "status": "awaiting_approval"},
+        )
+        await self.ws_manager.broadcast(
+            "prompt.approval_required",
+            {"approval": pending.model_dump()},
+        )
+
+        try:
+            approved = await fut
+        except asyncio.CancelledError:
+            self._approvals.pop(approval_id, None)
+            raise
+        finally:
+            self._approvals.pop(approval_id, None)
+
+        if run_id not in self._cancelled_runs:
+            with self._lock:
+                run = self._runs[run_id]
+                if run.status == "awaiting_approval":
+                    run.status = "running"
+            await self.ws_manager.broadcast(
+                "prompt.status",
+                {"run_id": run_id, "status": "running"},
+            )
+        return bool(approved)
+
+    # --- Worker Loop & Streaming Helpers ---
+
+    async def _project_worker(self, project_id: str) -> None:
+        queue = self._queues[project_id]
+        try:
+            while True:
+                run_id = await queue.get()
+                try:
+                    if run_id in self._cancelled_runs:
+                        continue
+                    task = asyncio.create_task(self._execute_run(run_id))
+                    self._active_tasks[run_id] = task
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        await self._finalize_run(run_id, "cancelled", error=None)
+                    finally:
+                        self._active_tasks.pop(run_id, None)
+                        self._active_chat_responses.pop(run_id, None)
+                        self._active_procs.pop(run_id, None)
+                finally:
+                    queue.task_done()
+        except asyncio.CancelledError:
+            return
+
+    async def _append_thought(self, run_id: str, delta: str) -> None:
+        if not delta:
+            return
+        with self._lock:
+            run = self._runs[run_id]
+            run.thoughts += delta
+        await self.ws_manager.broadcast(
+            "prompt.thought_delta",
+            {"run_id": run_id, "delta": delta},
+        )
+
+    async def _append_token(self, run_id: str, delta: str) -> None:
+        if not delta:
+            return
+        with self._lock:
+            run = self._runs[run_id]
+            run.response_text += delta
+        try:
+            sys.stdout.write(delta)
+            sys.stdout.flush()
+        except Exception:
+            pass
+        await self.ws_manager.broadcast(
+            "prompt.token_delta",
+            {"run_id": run_id, "delta": delta},
+        )
+
+    async def _emit_tool_call(self, run_id: str, tc: PromptToolCall) -> None:
+        with self._lock:
+            run = self._runs[run_id]
+            replaced = False
+            for idx, existing in enumerate(run.tool_calls):
+                if existing.id == tc.id:
+                    run.tool_calls[idx] = tc
+                    replaced = True
+                    break
+            if not replaced:
+                run.tool_calls.append(tc)
+        try:
+            if tc.status == "running":
+                print(f"\n🔧 [TOOL]: {tc.name} {tc.args or ''}", flush=True)
+            elif tc.status in ("completed", "error"):
+                print(f" -> [{tc.status.upper()}]", flush=True)
+        except Exception:
+            pass
+        await self.ws_manager.broadcast(
+            "prompt.tool_call",
+            {"run_id": run_id, "tool_call": tc.model_dump()},
+        )
+
+    async def _execute_run(self, run_id: str) -> None:
+        run = self.get_run(run_id)
+        project = self.project_service.get_project(run.project_id)
+        project_path = Path(project.path).resolve()
+        run_dir = (self.runs_dir / run_id).resolve()
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        with self._lock:
+            cur = self._runs[run_id]
+            cur.status = "running"
+            cur.started_at = utc_now_iso()
+        self._save_runs()
+
+        await self.ws_manager.broadcast(
+            "prompt.status",
+            {"run_id": run_id, "status": "running", "started_at": self._runs[run_id].started_at},
+        )
+        print(f"\n" + "=" * 56, flush=True)
+        print(f"⚡ [PROMPT TỪ {run.device_name or 'MOBILE'}]: \"{run.prompt}\"", flush=True)
+        print(f"   Dự án: {project.name} | Engine: {run.engine_mode} | Quyền: {run.execution_policy}", flush=True)
+        print("=" * 56, flush=True)
+
+        try:
+            if run.engine_mode == "antigravity_sdk":
+                await self._run_antigravity_sdk(run_id, project_path, run_dir)
+            elif run.engine_mode == "cli":
+                await self._run_cli(run_id, project_path, run_dir)
+            else:
+                await self._run_demo(run_id, project_path, run_dir)
+
+            if run_id in self._cancelled_runs:
+                await self._finalize_run(run_id, "cancelled", error=None)
+            else:
+                await self._finalize_run(run_id, "completed", error=None)
+        except asyncio.CancelledError:
+            await self._finalize_run(run_id, "cancelled", error=None)
+            raise
+        except Exception as exc:
+            logger.exception("Prompt run %s failed: %s", run_id, exc)
+            exc_str = str(exc)
+            if "429" in exc_str or "quota" in exc_str.lower() or "resource_exhausted" in exc_str.lower():
+                current_model = self.settings.get_model()
+                delay = 12600
+                m_delay = re.search(r"retryDelay:?\s*(\d+)s", exc_str)
+                if m_delay:
+                    try:
+                        delay = int(m_delay.group(1))
+                    except ValueError:
+                        pass
+                from .models_service import ModelsService
+                ModelsService(self.config, self.settings).record_exhaustion(current_model, delay)
+            await self._finalize_run(run_id, "failed", error=str(exc))
+
+    def _write_run_report(self, run: PromptRun, run_dir: Path) -> None:
+        lines = [
+            f"# Antigravity Pulse Report — {run.project_name}",
+            "",
+            f"- **Run ID**: `{run.id}`",
+            f"- **Engine**: `{run.engine_mode}`",
+            f"- **Policy**: `{run.execution_policy}`",
+            f"- **Status**: `{run.status}`",
+            f"- **Created**: {run.created_at}",
+            f"- **Finished**: {run.finished_at or utc_now_iso()}",
+            "",
+            "## Prompt",
+            "",
+            run.prompt,
+            "",
+        ]
+        if run.thoughts.strip():
+            lines.extend(["## Thoughts", "", run.thoughts.strip(), ""])
+        if run.tool_calls:
+            lines.extend(["## Tool Calls", ""])
+            for tc in run.tool_calls:
+                lines.append(f"- `{tc.name}` (`{tc.status}`) — `{tc.args or {}}`")
+            lines.append("")
+        lines.extend(["## Response", "", run.response_text.strip() or "_No response text._", ""])
+        if run.error:
+            lines.extend(["## Error", "", f"```\n{run.error}\n```", ""])
+
+        report_path = run_dir / "report.md"
+        report_path.write_text("\n".join(lines), encoding="utf-8")
+
+    def _index_run_artifacts(self, run: PromptRun, run_dir: Path) -> list[ArtifactItem]:
+        if not run_dir.is_dir():
+            return []
+        items: list[ArtifactItem] = []
+        scope_title = f"{run.project_name}: {run.prompt[:42]}"
+        for p in run_dir.rglob("*"):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(run_dir).as_posix()
+            # Skip internal SDK storage directory inside run_dir
+            if rel == "sdk_state" or rel.startswith("sdk_state/"):
+                continue
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            category, mime_type = classify_file(p.name)
+            encoded = quote(rel)
+            items.append(
+                ArtifactItem(
+                    id=f"run:{run.id}:{rel}",
+                    source="prompt_run",
+                    scope_id=run.id,
+                    scope_title=scope_title,
+                    name=p.name,
+                    rel_path=rel,
+                    category=category,
+                    mime_type=mime_type,
+                    size=int(st.st_size),
+                    modified_at=timestamp_to_iso(st.st_mtime),
+                    raw_url=f"/api/prompts/{run.id}/artifact-raw?path={encoded}",
+                    preview_url=f"/api/prompts/{run.id}/artifact-content?path={encoded}",
+                )
+            )
+        items.sort(key=lambda a: (a.name != "report.md", a.modified_at), reverse=False)
+        return items
+
+    async def _finalize_run(self, run_id: str, status: str, *, error: str | None) -> None:
+        run_dir = (self.runs_dir / run_id).resolve()
+        run_dir.mkdir(parents=True, exist_ok=True)
+        finished_at = utc_now_iso()
+
+        with self._lock:
+            run = self._runs[run_id]
+            run.status = status  # type: ignore[assignment]
+            run.finished_at = finished_at
+            if error:
+                run.error = error
+
+        if status == "completed":
+            self._write_run_report(self.get_run(run_id), run_dir)
+            artifacts = self._index_run_artifacts(self.get_run(run_id), run_dir)
+            with self._lock:
+                self._runs[run_id].output_artifacts = artifacts
+
+        self._save_runs()
+        self.project_service.touch_activity(self._runs[run_id].project_id)
+
+        await self.ws_manager.broadcast(
+            "prompt.status",
+            {
+                "run_id": run_id,
+                "status": status,
+                "finished_at": finished_at,
+                "error": error,
+            },
+        )
+        print(f"\n✨ [HOÀN TẤT TÁC VỤ {run_id}] Trạng thái: {status.upper()}", flush=True)
+        await self.ws_manager.broadcast(
+            "prompt.completed",
+            {
+                "run_id": run_id,
+                "status": status,
+                "finished_at": finished_at,
+                "error": error,
+            },
+        )
+        if status == "completed":
+            await self.ws_manager.broadcast(
+                "artifact.updated",
+                {"source": "prompt_run", "scope_id": run_id, "path": "report.md"},
+            )
+
+    # --- Engine Implementations ---
+
+    async def _run_antigravity_sdk(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        try:
+            from google.antigravity import Agent, BuiltinTools, CapabilitiesConfig, LocalAgentConfig
+            from google.antigravity import types as ga_types
+            from google.antigravity.hooks import policy
+        except Exception as exc:
+            raise RuntimeError(f"Không thể nạp google-antigravity SDK: {exc}") from exc
+
+        api_key = self.settings.get_effective_api_key()
+        vertex_enabled, vertex_project, vertex_location = self.settings.get_effective_vertex()
+        if not api_key and not (vertex_enabled and vertex_project):
+            raise RuntimeError(
+                "Chưa cấu hình GEMINI_API_KEY hoặc Vertex AI. "
+                "Vui lòng vào Cài đặt (Settings) trên điện thoại để nhập API Key, "
+                "hoặc chọn chế độ Demo Simulator / CLI Runner."
+            )
+
+        run = self.get_run(run_id)
+        project_name = run.project_name
+
+        read_only_names = [t.value for t in BuiltinTools.read_only()] + [
+            t.value for t in BuiltinTools.deprecated()
+        ]
+
+        if run.execution_policy == "read_only":
+            capabilities = CapabilitiesConfig(
+                disabled_tools=[
+                    BuiltinTools.CREATE_FILE,
+                    BuiltinTools.EDIT_FILE,
+                    BuiltinTools.RUN_COMMAND,
+                    BuiltinTools.INVOKE_SUBAGENT,
+                    BuiltinTools.RUN_WORKFLOW,
+                    BuiltinTools.GENERATE_IMAGE,
+                    BuiltinTools.SCHEDULE,
+                    BuiltinTools.ASK_QUESTION,
+                ]
+            )
+            policies_list = [
+                policy.deny_all(),
+                *[policy.allow(n) for n in read_only_names],
+                policy.allow(BuiltinTools.SEARCH_WEB.value),
+            ]
+        elif run.execution_policy == "ask_mobile":
+            capabilities = CapabilitiesConfig(
+                disabled_tools=[BuiltinTools.ASK_QUESTION]
+            )
+
+            async def _mobile_ask_handler(tc: ga_types.ToolCall, reason: str = "") -> bool:
+                tool_name = tc.name.value if hasattr(tc.name, "value") else str(tc.name)
+                desc = reason.strip() if reason else f"Agent muốn thực thi tool '{tool_name}' trong {project_name}"
+                return await self._request_mobile_approval(
+                    run_id=run_id,
+                    project_name=project_name,
+                    tool_name=tool_name,
+                    description=desc,
+                    args=dict(tc.args or {}),
+                )
+
+            policies_list = [
+                *[policy.allow(n) for n in read_only_names],
+                policy.allow(BuiltinTools.SEARCH_WEB.value),
+                policy.ask_user("*", handler=_mobile_ask_handler),
+            ]
+        else:
+            # auto_workspace
+            capabilities = CapabilitiesConfig(
+                disabled_tools=[BuiltinTools.ASK_QUESTION]
+            )
+            policies_list = [
+                *policy.workspace_only([str(project_path)]),
+                policy.allow_all(),
+            ]
+
+        sdk_state_dir = run_dir / "sdk_state"
+        sdk_app_data = self.config.data_dir / "antigravity_sdk"
+        sdk_state_dir.mkdir(parents=True, exist_ok=True)
+        sdk_app_data.mkdir(parents=True, exist_ok=True)
+
+        cfg_kwargs: dict[str, Any] = {
+            "workspaces": [str(project_path)],
+            "capabilities": capabilities,
+            "policies": policies_list,
+            "model": self.settings.get_model(),
+            "save_dir": str(sdk_state_dir),
+            "app_data_dir": str(sdk_app_data),
+        }
+        if vertex_enabled and vertex_project:
+            cfg_kwargs["vertex"] = True
+            cfg_kwargs["project"] = vertex_project
+            cfg_kwargs["location"] = vertex_location
+        else:
+            cfg_kwargs["api_key"] = api_key
+            cfg_kwargs["vertex"] = False
+
+        agent_config = LocalAgentConfig(**cfg_kwargs)
+
+        # Build multimodal input with uploaded attachments
+        prompt_parts: list[Any] = [run.prompt]
+        extra_notes: list[str] = []
+        for att in run.attachments:
+            try:
+                att_path, _, mime = self.resolve_upload_raw(att.id)
+                if mime in ga_types.SUPPORTED_IMAGE_MIMES:
+                    prompt_parts.append(ga_types.Image.from_file(att_path, description=att.name))
+                elif mime in ga_types.SUPPORTED_DOCUMENT_MIMES:
+                    prompt_parts.append(ga_types.Document.from_file(att_path, description=att.name))
+                else:
+                    extra_notes.append(f"- Attachment `{att.name}` ({mime}) saved at `{att_path}`")
+            except Exception:
+                continue
+
+        if extra_notes:
+            prompt_parts[0] = f"{run.prompt}\n\nAttached files:\n" + "\n".join(extra_notes)
+
+        chat_input: Any = prompt_parts if len(prompt_parts) > 1 else prompt_parts[0]
+
+        tool_call_index: dict[str, PromptToolCall] = {}
+        async with Agent(agent_config) as agent:
+            chat_resp = await agent.chat(chat_input)
+            self._active_chat_responses[run_id] = chat_resp
+            async for chunk in chat_resp.chunks:
+                if run_id in self._cancelled_runs:
+                    await chat_resp.cancel()
+                    break
+                if isinstance(chunk, ga_types.Thought):
+                    await self._append_thought(run_id, chunk.text)
+                elif isinstance(chunk, ga_types.Text):
+                    await self._append_token(run_id, chunk.text)
+                elif isinstance(chunk, ga_types.ToolCall):
+                    tc_id = chunk.id or f"tc_{secrets.token_hex(4)}"
+                    t_name = chunk.name.value if hasattr(chunk.name, "value") else str(chunk.name)
+                    ptc = PromptToolCall(
+                        id=tc_id,
+                        name=t_name,
+                        args=dict(chunk.args or {}),
+                        status="running",
+                        timestamp=utc_now_iso(),
+                    )
+                    tool_call_index[tc_id] = ptc
+                    await self._emit_tool_call(run_id, ptc)
+                elif isinstance(chunk, ga_types.ToolResult):
+                    tc_id = chunk.id or ""
+                    t_name = chunk.name.value if hasattr(chunk.name, "value") else str(chunk.name)
+                    status = "error" if chunk.error else "completed"
+                    existing = tool_call_index.get(tc_id)
+                    ptc = PromptToolCall(
+                        id=tc_id or f"tc_{secrets.token_hex(4)}",
+                        name=t_name,
+                        args=existing.args if existing else None,
+                        status=status,
+                        timestamp=utc_now_iso(),
+                    )
+                    await self._emit_tool_call(run_id, ptc)
+
+    async def _run_cli(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        del run_dir
+        run = self.get_run(run_id)
+        agy_bin = shutil.which("agy")
+        if not agy_bin:
+            default_agy = Path.home() / ".gemini" / "bin" / ("agy.exe" if os.name == "nt" else "agy")
+            if default_agy.exists():
+                agy_bin = str(default_agy)
+        prompt_text = run.prompt.strip()
+
+        await self._append_thought(
+            run_id,
+            f"Chuẩn bị chạy CLI runner tại `{project_path}` (chính sách: `{run.execution_policy}`).\n",
+        )
+
+        use_agy = agy_bin is not None and not prompt_text.startswith("$ ")
+        if use_agy and agy_bin:
+            cmd_display = f"agy {prompt_text}"
+            argv = [agy_bin, prompt_text]
+        else:
+            raw_cmd = prompt_text[2:].strip() if prompt_text.startswith("$ ") else prompt_text
+            cmd_display = raw_cmd
+            if os.name == "nt":
+                argv = ["powershell", "-NoProfile", "-Command", raw_cmd]
+            else:
+                argv = ["sh", "-lc", raw_cmd]
+
+            if run.execution_policy == "read_only":
+                lowered = raw_cmd.lower().strip()
+                if not any(lowered == p or lowered.startswith(p + " ") for p in SAFE_READONLY_CLI_PREFIXES):
+                    raise RuntimeError(
+                        f"Chính sách Chỉ đọc (read_only) chặn lệnh '{raw_cmd}'. "
+                        "Hãy chuyển sang 'Hỏi duyệt trên ĐT' hoặc dùng lệnh đọc (git status, dir, ls...)."
+                    )
+
+        if run.execution_policy == "ask_mobile":
+            approved = await self._request_mobile_approval(
+                run_id=run_id,
+                project_name=run.project_name,
+                tool_name="run_command",
+                description=f"Thực thi lệnh CLI trong {run.project_name}",
+                args={"command": cmd_display, "cwd": str(project_path)},
+            )
+            if not approved:
+                await self._append_token(run_id, f"Đã từ chối thực thi lệnh: `{cmd_display}`.\n")
+                return
+
+        tc_id = f"tc_{secrets.token_hex(4)}"
+        await self._emit_tool_call(
+            run_id,
+            PromptToolCall(
+                id=tc_id,
+                name="run_command",
+                args={"command": cmd_display, "cwd": str(project_path)},
+                status="running",
+                timestamp=utc_now_iso(),
+            ),
+        )
+
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(project_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        self._active_procs[run_id] = proc
+
+        await self._append_token(run_id, f"```text\n$ {cmd_display}\n")
+        assert proc.stdout is not None
+        while True:
+            if run_id in self._cancelled_runs:
+                proc.terminate()
+                break
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            await self._append_token(run_id, line.decode("utf-8", errors="replace"))
+
+        rc = await proc.wait()
+        await self._append_token(run_id, f"\n```\n\nExit code: `{rc}`\n")
+        await self._emit_tool_call(
+            run_id,
+            PromptToolCall(
+                id=tc_id,
+                name="run_command",
+                args={"command": cmd_display, "exit_code": rc},
+                status="completed" if rc == 0 else "error",
+                timestamp=utc_now_iso(),
+            ),
+        )
+        if rc != 0 and run_id not in self._cancelled_runs:
+            raise RuntimeError(f"CLI command exited with code {rc}")
+
+    async def _run_demo(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        del run_dir
+        run = self.get_run(run_id)
+
+        thought_steps = [
+            f"1. Đọc ngữ cảnh workspace `{project_path}` theo chính sách `{run.execution_policy}`...\n",
+            f"2. Phân tích yêu cầu từ thiết bị `{run.device_name or 'Mobile'}`: \"{run.prompt[:120]}\"...\n",
+            "3. Tổng hợp cấu trúc tệp và chuẩn bị báo cáo Markdown...\n",
+        ]
+        for chunk in thought_steps:
+            await self._append_thought(run_id, chunk)
+            await asyncio.sleep(0.06)
+
+        list_tc_id = f"tc_{secrets.token_hex(4)}"
+        await self._emit_tool_call(
+            run_id,
+            PromptToolCall(
+                id=list_tc_id,
+                name="list_directory",
+                args={"path": str(project_path)},
+                status="running",
+                timestamp=utc_now_iso(),
+            ),
+        )
+        entries: list[str] = []
+        if project_path.is_dir():
+            entries = sorted(p.name for p in project_path.iterdir())[:12]
+        await asyncio.sleep(0.05)
+        await self._emit_tool_call(
+            run_id,
+            PromptToolCall(
+                id=list_tc_id,
+                name="list_directory",
+                args={"path": str(project_path), "count": len(entries)},
+                status="completed",
+                timestamp=utc_now_iso(),
+            ),
+        )
+
+        approval_note = ""
+        if run.execution_policy == "ask_mobile":
+            write_tc_id = f"tc_{secrets.token_hex(4)}"
+            proposed_args = {
+                "path": "report.md",
+                "workspace": str(project_path),
+                "summary": "Xuất báo cáo phân tích Markdown cho phiên làm việc",
+            }
+            await self._emit_tool_call(
+                run_id,
+                PromptToolCall(
+                    id=write_tc_id,
+                    name="create_file",
+                    args=proposed_args,
+                    status="awaiting_approval",
+                    timestamp=utc_now_iso(),
+                ),
+            )
+            approved = await self._request_mobile_approval(
+                run_id=run_id,
+                project_name=run.project_name,
+                tool_name="create_file",
+                description=f"Cho phép tạo báo cáo kết quả cho `{run.project_name}`?",
+                args=proposed_args,
+            )
+            await self._emit_tool_call(
+                run_id,
+                PromptToolCall(
+                    id=write_tc_id,
+                    name="create_file",
+                    args=proposed_args,
+                    status="completed" if approved else "denied",
+                    timestamp=utc_now_iso(),
+                ),
+            )
+            approval_note = (
+                "- **Phê duyệt di động**: Người dùng đã **Cho phép** thao tác tạo báo cáo.\n"
+                if approved
+                else "- **Phê duyệt di động**: Người dùng đã **Từ chối** ghi file; chỉ trả về tóm tắt chỉ đọc.\n"
+            )
+
+        att_section = ""
+        if run.attachments:
+            att_lines = "\n".join(f"  - `{a.name}` ({a.mime_type}, {a.size} bytes)" for a in run.attachments)
+            att_section = f"\n### Tệp đính kèm đã nhận\n{att_lines}\n"
+
+        files_preview = "\n".join(f"- `{name}`" for name in entries) if entries else "- _(Thư mục trống)_"
+        markdown_response = (
+            f"### Kết quả phân tích (Demo Simulator)\n\n"
+            f"- **Dự án**: `{run.project_name}` (`{project_path}`)\n"
+            f"- **Chính sách**: `{run.execution_policy}`\n"
+            f"{approval_note}"
+            f"- **Prompt**: {run.prompt}\n"
+            f"{att_section}\n"
+            f"### Thành phần hiện có trong workspace\n"
+            f"{files_preview}\n\n"
+            f"> Báo cáo chi tiết đã được tự động lưu tại `report.md` và đồng bộ tới Kho Kết quả.\n"
+        )
+
+        # Stream response in small token chunks
+        chunk_size = 36
+        for i in range(0, len(markdown_response), chunk_size):
+            if run_id in self._cancelled_runs:
+                break
+            await self._append_token(run_id, markdown_response[i : i + chunk_size])
+            await asyncio.sleep(0.02)
+
+    # --- Run Artifacts ---
+
+    def list_all_output_artifacts(self) -> list[ArtifactItem]:
+        items: list[ArtifactItem] = []
+        with self._lock:
+            runs = list(self._runs.values())
+        for run in runs:
+            if run.output_artifacts:
+                items.extend(run.output_artifacts)
+            else:
+                run_dir = (self.runs_dir / run.id).resolve()
+                if run_dir.is_dir():
+                    items.extend(self._index_run_artifacts(run, run_dir))
+        items.sort(key=lambda a: a.modified_at, reverse=True)
+        return items
+
+    def get_run_artifact_content(self, run_id: str, rel_path: str) -> FileContentResponse:
+        self.get_run(run_id)
+        run_dir = (self.runs_dir / run_id).resolve()
+        target_file, clean_rel = safe_jail_path(run_dir, rel_path, allow_root=False)
+        if not target_file.exists() or not target_file.is_file():
+            raise HTTPException(status_code=404, detail="Run artifact not found")
+        st = target_file.stat()
+        category, mime_type = classify_file(target_file)
+        text = read_text_preview(target_file, category, mime_type)
+        return FileContentResponse(
+            rel_path=clean_rel,
+            name=target_file.name,
+            size=int(st.st_size),
+            mime_type=mime_type,
+            category=category,
+            text=text,
+            raw_url=f"/api/prompts/{run_id}/artifact-raw?path={quote(clean_rel)}",
+            modified_at=timestamp_to_iso(st.st_mtime),
+        )
+
+    def resolve_run_artifact_raw(self, run_id: str, rel_path: str) -> tuple[Path, str, str]:
+        self.get_run(run_id)
+        run_dir = (self.runs_dir / run_id).resolve()
+        target_file, _ = safe_jail_path(run_dir, rel_path, allow_root=False)
+        if not target_file.exists() or not target_file.is_file():
+            raise HTTPException(status_code=404, detail="Run artifact not found")
+        _, mime_type = classify_file(target_file)
+        return target_file, target_file.name, mime_type

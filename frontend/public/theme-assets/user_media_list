@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "images": [],
+  "videos": [
+    {
+      "url": "user_media/1795244034316_under-the-cherry-tree.1920x1080.mp4",
+      "fileName": "1795244034316_under-the-cherry-tree.1920x1080.mp4",
+      "name": "under-the-cherry-tree.1920x1080.mp4",
+      "kind": "video",
+      "size": 67965788,
+      "addedAt": 1795584390149
+    }
+  ],
+  "audios": [
+    {
+      "url": "user_media/1795011944060_Tawa_voice_task_1.mp3",
+      "fileName": "1795011944060_Tawa_voice_task_1.mp3",
+      "name": "Tawa_voice_task_1.mp3",
+      "kind": "audio",
+      "size": 75300,
+      "addedAt": 1795242476945
+    }
+  ]
+}

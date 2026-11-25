@@ -1,0 +1,623 @@
+/* Cinematic 6-Stage Starfield Boot Intro Overlay (ported from antigravity-custom-theme-mod) */
+#agy-boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: #000000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px 24px;
+  font-family: ui-monospace, 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  color: #f4f4f5;
+  overflow: hidden;
+  transition: background-color 0.6s ease, opacity 0.65s ease;
+  user-select: none;
+}
+
+#agy-boot-overlay.hud-mode {
+  background: #050507;
+}
+
+#agy-boot-overlay.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#agy-boot-overlay.done.instant {
+  display: none;
+  transition: none;
+}
+
+#agy-boot-overlay .agy-boot-starfield {
+  position: absolute;
+  inset: -8px;
+  z-index: 0;
+  background: url('/theme-assets/starfield-boot-bg.jpg') center center / cover no-repeat;
+  filter: blur(1.2px) brightness(0.62) contrast(1.08);
+  opacity: 0;
+  transition: opacity 0.85s ease;
+  pointer-events: none;
+}
+
+#agy-boot-overlay.hud-mode .agy-boot-starfield {
+  opacity: 0.58;
+}
+
+#agy-boot-overlay .agy-boot-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 48%, rgba(4, 4, 6, 0.25) 20%, rgba(4, 4, 6, 0.78) 100%);
+  opacity: 0;
+  transition: opacity 0.85s ease;
+  pointer-events: none;
+}
+
+#agy-boot-overlay.hud-mode .agy-boot-vignette {
+  opacity: 1;
+}
+
+#agy-boot-overlay .agy-splash-sheen {
+  position: absolute;
+  inset: -30%;
+  z-index: 3;
+  pointer-events: none;
+  transform: translateX(-85%);
+  background: linear-gradient(
+    112deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.05) 52%,
+    transparent 62%
+  );
+}
+
+#agy-boot-overlay .agy-splash-sheen.run {
+  animation: agyDiagSheen 1.25s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+@keyframes agyDiagSheen {
+  from { transform: translateX(-85%); }
+  to { transform: translateX(85%); }
+}
+
+#agy-boot-overlay .agy-hud-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 46px;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+#agy-boot-overlay .agy-hud-scanline.sweep {
+  animation: agyHudScan 0.85s ease-out forwards;
+}
+
+@keyframes agyHudScan {
+  0% { top: 8%; opacity: 0; }
+  25% { opacity: 1; }
+  100% { top: 92%; opacity: 0; }
+}
+
+#agy-flash-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle at 82% 85%,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(212, 212, 216, 0.78) 48%,
+    rgba(161, 161, 170, 0.55) 100%
+  );
+}
+
+#agy-flash-curtain.burst {
+  animation: agyFlashBurst 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes agyFlashBurst {
+  0% { opacity: 0; }
+  28% { opacity: 0.92; }
+  100% { opacity: 0; }
+}
+
+#agy-boot-overlay .agy-boot-header,
+#agy-boot-overlay .agy-boot-footer {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: #71717a;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+#agy-boot-overlay .agy-boot-header {
+  align-items: flex-start;
+}
+
+#agy-boot-overlay .agy-boot-footer {
+  align-items: center;
+  padding-bottom: 18px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#agy-boot-overlay.hud-mode .agy-boot-header,
+#agy-boot-overlay.hud-mode .agy-boot-footer {
+  opacity: 1;
+}
+
+#agy-boot-overlay .agy-boot-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#agy-boot-overlay .agy-boot-brand strong {
+  font-size: 14px;
+  color: #ffffff;
+  letter-spacing: 0.16em;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+}
+
+#agy-boot-overlay .agy-boot-brand .sub-line {
+  font-size: 9px;
+  color: #71717a;
+  letter-spacing: 0.22em;
+}
+
+#agy-boot-overlay .agy-boot-rev {
+  margin-top: 8px;
+  font-size: 9.5px;
+  color: #52525b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#agy-boot-overlay .agy-boot-rev .blue-rev {
+  color: #60a5fa;
+}
+
+#agy-boot-overlay .agy-boot-skip {
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  color: #a1a1aa;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+#agy-boot-overlay .agy-boot-skip:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+#agy-boot-overlay .agy-boot-stage-wrap {
+  position: relative;
+  z-index: 5;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#agy-boot-overlay .agy-boot-stage {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 560px;
+  width: 100%;
+}
+
+#agy-boot-overlay .agy-boot-stage.active {
+  display: flex;
+}
+
+#agy-boot-overlay .agy-stagger-char {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(2px);
+  filter: blur(1.5px);
+  animation: agyCharFadeIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+#agy-boot-overlay .agy-stagger-space {
+  display: inline-block;
+  width: 0.32em;
+}
+
+@keyframes agyCharFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+#agy-boot-overlay .wipe-out {
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+
+#agy-boot-overlay .stage-fade-out {
+  opacity: 0 !important;
+  transform: scale(1.06);
+  transition: opacity 0.58s ease, transform 0.58s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#agy-boot-overlay .agy-welcome-reveal {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: agyWelcomeIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes agyWelcomeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#agy-boot-overlay .agy-splash-logo {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  margin-bottom: 16px;
+  opacity: 0;
+  filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.18));
+  animation: agySplashFade 2.5s ease forwards;
+}
+
+#agy-boot-overlay .agy-splash-wordmark {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  color: #ffffff;
+  margin-bottom: 5px;
+  opacity: 0;
+  animation: agySplashFade 2.5s ease 0.15s forwards;
+}
+
+#agy-boot-overlay .agy-splash-caption {
+  font-size: 9px;
+  letter-spacing: 0.36em;
+  color: #71717a;
+  opacity: 0;
+  animation: agySplashFade 2.5s ease 0.25s forwards;
+}
+
+@keyframes agySplashFade {
+  0% { opacity: 0; transform: scale(0.95); }
+  20% { opacity: 1; transform: scale(1); }
+  76% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#agy-boot-overlay .agy-hud-title {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: clamp(18px, 4vw, 26px);
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  color: #f4f4f5;
+}
+
+#agy-boot-overlay .agy-hud-subtitle {
+  font-size: 10.5px;
+  letter-spacing: 0.34em;
+  color: #8c8c94;
+  margin-bottom: 30px;
+}
+
+#agy-boot-overlay .agy-hud-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  color: #e4e4e7;
+  padding: 11px 28px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+#agy-boot-overlay .agy-hud-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+}
+
+#agy-boot-overlay .agy-hud-btn span {
+  position: relative;
+  z-index: 1;
+}
+
+#agy-boot-overlay .agy-hud-btn:hover::before,
+#agy-boot-overlay .agy-hud-btn.triggered::before {
+  transform: scaleX(1);
+}
+
+#agy-boot-overlay .agy-hud-btn:hover,
+#agy-boot-overlay .agy-hud-btn.triggered {
+  color: #000000;
+  border-color: #ffffff;
+}
+
+#agy-boot-overlay .agy-hud-hint {
+  margin-top: 12px;
+  font-size: 9.5px;
+  color: #71717a;
+  letter-spacing: 0.14em;
+}
+
+#agy-boot-overlay .agy-id-table {
+  width: 290px;
+  max-width: 90vw;
+  padding: 12px 0;
+  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 10.5px;
+}
+
+#agy-boot-overlay .agy-id-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#agy-boot-overlay .agy-id-row span:first-child {
+  color: #52525b;
+  letter-spacing: 0.14em;
+}
+
+#agy-boot-overlay .agy-id-row span:last-child {
+  color: #f4f4f5;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+#agy-boot-overlay .agy-icon-morph-box {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  margin: 8px 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#agy-boot-overlay .agy-icon-outline-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.45s ease;
+}
+
+#agy-boot-overlay .agy-icon-outline-svg.fade-stroke {
+  opacity: 0;
+}
+
+#agy-boot-overlay .agy-icon-outline-path {
+  fill: none;
+  stroke: url(#agyBootStrokeGrad);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.28));
+}
+
+#agy-boot-overlay .agy-icon-outline-path.trace {
+  animation: agyTraceOutline 1.05s cubic-bezier(0.35, 0.05, 0.25, 1) forwards;
+}
+
+@keyframes agyTraceOutline {
+  to { stroke-dashoffset: 0; }
+}
+
+#agy-boot-overlay .agy-icon-color-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+  clip-path: inset(85% 0 0 0);
+  opacity: 0;
+  transition: clip-path 1.05s cubic-bezier(0.35, 0.05, 0.25, 1), opacity 0.12s ease, filter 0.45s ease;
+}
+
+#agy-boot-overlay .agy-icon-color-fill.filled {
+  clip-path: inset(13% 0 0 0);
+  opacity: 1;
+  filter: drop-shadow(0 0 14px rgba(59, 130, 246, 0.28));
+}
+
+#agy-boot-overlay .agy-dot-grid-small {
+  font-size: 10px;
+  letter-spacing: 0.48em;
+  color: #52525b;
+  line-height: 1.8;
+}
+
+#agy-boot-overlay .agy-hex-column {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9.5px;
+  line-height: 1.85;
+  color: rgba(255, 255, 255, 0.24);
+  letter-spacing: 0.16em;
+  text-align: right;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#agy-boot-overlay .agy-hex-column.visible {
+  opacity: 1;
+}
+
+#agy-boot-overlay .agy-verify-ring-stage {
+  position: relative;
+  width: min(360px, 84vw);
+  height: min(360px, 84vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#agy-boot-overlay .agy-arc-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: agySpinCW 4.2s linear infinite;
+}
+
+#agy-boot-overlay .agy-arc-svg-inner {
+  position: absolute;
+  inset: 28px;
+  width: calc(100% - 56px);
+  height: calc(100% - 56px);
+  animation: agySpinCCW 5.5s linear infinite;
+}
+
+#agy-boot-overlay .agy-orbit-dots {
+  position: absolute;
+  inset: 42px;
+  border-radius: 50%;
+  animation: agySpinCW 3.4s linear infinite;
+}
+
+#agy-boot-overlay .agy-orbit-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #60a5fa;
+}
+
+#agy-boot-overlay .agy-orbit-dot.w {
+  background: #ffffff;
+  width: 3px;
+  height: 3px;
+}
+
+@keyframes agySpinCW {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes agySpinCCW {
+  to { transform: rotate(-360deg); }
+}
+
+#agy-boot-overlay .agy-welcome-eyebrow {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  color: #f4f4f5;
+  margin-bottom: 10px;
+}
+
+#agy-boot-overlay .agy-welcome-solid-box {
+  background: #ffffff;
+  color: #050505;
+  padding: 4px 18px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  margin-bottom: 22px;
+  box-shadow: 0 0 28px rgba(255, 255, 255, 0.22);
+}
+
+#agy-boot-overlay .agy-welcome-flare-wrap {
+  position: relative;
+  width: 260px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+#agy-boot-overlay .agy-welcome-flare-wrap img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  position: relative;
+  z-index: 2;
+}
+
+#agy-boot-overlay .agy-bottom-progress-track {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 33.33vw;
+  max-width: 440px;
+  bottom: 4px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#agy-boot-overlay .agy-bottom-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: #ffffff;
+  transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#agy-boot-overlay .agy-eq-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+  margin-right: 10px;
+}
+
+#agy-boot-overlay .agy-eq-bars span {
+  width: 2px;
+  background: #60a5fa;
+  animation: agyEqPulse 0.9s ease-in-out infinite alternate;
+}
+
+#agy-boot-overlay .agy-eq-bars span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+#agy-boot-overlay .agy-eq-bars span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes agyEqPulse {
+  from { height: 3px; opacity: 0.45; }
+  to { height: 11px; opacity: 1; }
+}

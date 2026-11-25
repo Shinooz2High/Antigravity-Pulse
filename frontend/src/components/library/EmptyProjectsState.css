@@ -1,0 +1,222 @@
+/* Lucian UX/UI Prompt #440 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#440 */
+
+.u440 {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.u440-il {
+  width: 176px;
+  height: 132px;
+  overflow: visible;
+  animation: u440-float 3.2s ease-in-out infinite;
+}
+@keyframes u440-float {
+  50% { transform: translateY(-6px); }
+}
+
+.u440-il .sh {
+  fill: #000;
+  opacity: .08;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: u440-sh 3.2s ease-in-out infinite;
+}
+.dark .u440-il .sh {
+  fill: #fff;
+  opacity: .05;
+}
+@keyframes u440-sh {
+  50% { transform: scaleX(.86); opacity: .04; }
+}
+
+.u440-il .bk {
+  fill: #818cf8;
+}
+.u440-il .fr {
+  fill: #6366f1;
+}
+.u440-il .fh {
+  fill: #ffffff;
+  opacity: .2;
+}
+
+.u440-il .doc rect.p {
+  fill: #ffffff;
+  stroke: rgba(148, 163, 184, 0.4);
+  stroke-width: 1.2;
+}
+.dark .u440-il .doc rect.p {
+  fill: #1e293b;
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+.u440-il .doc .ln {
+  fill: rgba(148, 163, 184, 0.4);
+}
+.u440-il .doc .hd {
+  fill: #10b981;
+}
+
+.u440-il .doc {
+  opacity: 0;
+  transform: translateY(-110px) rotate(-10deg);
+  transform-box: view-box;
+  transform-origin: 80px 50px;
+}
+.u440-il .fol {
+  transform-box: view-box;
+  transform-origin: 80px 112px;
+}
+
+.u440-il .sp {
+  fill: #f59e0b;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: u440-tw 2.4s ease-in-out infinite;
+}
+.u440-il .sp:nth-of-type(2) {
+  animation-delay: -.8s;
+  fill: #10b981;
+}
+.u440-il .sp:nth-of-type(3) {
+  animation-delay: -1.6s;
+  fill: #06b6d4;
+}
+@keyframes u440-tw {
+  0%, 100% { transform: scale(.6); opacity: .35; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+.u440.is-done .u440-il .doc {
+  animation: u440-drop .8s cubic-bezier(.4, 0, .6, 1) forwards;
+}
+@keyframes u440-drop {
+  0% { opacity: 0; transform: translateY(-110px) rotate(-10deg); }
+  20% { opacity: 1; }
+  62% { transform: translateY(6px) rotate(2deg); }
+  80% { transform: translateY(-3px) rotate(-1deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+.u440.is-done .u440-il .fol {
+  animation: u440-bump .9s cubic-bezier(.3, 1.4, .5, 1) .38s;
+}
+@keyframes u440-bump {
+  0% { transform: none; }
+  25% { transform: scale(1.06, .9); }
+  55% { transform: scale(.97, 1.04); }
+  100% { transform: none; }
+}
+
+.u440-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+.u440-burst i {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c);
+  opacity: 0;
+}
+.u440.is-done .u440-burst i {
+  animation: u440-pop .7s cubic-bezier(.2, .8, .3, 1) .42s forwards;
+}
+@keyframes u440-pop {
+  0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-58px) scale(.4); }
+}
+
+.u440-ill {
+  position: relative;
+}
+
+.u440-h {
+  display: grid;
+  margin: 16px 0;
+}
+.u440-h b {
+  grid-area: 1/1;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -.02em;
+  color: #0f172a;
+  transition: opacity .25s ease, transform .45s cubic-bezier(.3, 1.4, .5, 1), filter .25s;
+}
+.dark .u440-h b {
+  color: #f8fafc;
+}
+.u440-h b + b {
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(3px);
+}
+.u440.is-done .u440-h b:first-child {
+  opacity: 0;
+  transform: translateY(-8px);
+  filter: blur(3px);
+}
+.u440.is-done .u440-h b + b {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition-delay: .45s;
+}
+
+.u440-go {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  box-shadow: 0 10px 22px -8px rgba(99, 102, 241, 0.45);
+  transform: scale(var(--k, 1));
+  transition: transform .45s cubic-bezier(.34, 1.7, .5, 1), box-shadow .2s;
+  cursor: pointer;
+}
+.u440-go:hover {
+  --k: 1.04;
+  box-shadow: 0 12px 26px -8px rgba(99, 102, 241, 0.65);
+}
+.u440-go:active {
+  --k: .95;
+  transition: transform .1s ease;
+}
+.u440-go svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u440-il, .u440-il .sh, .u440-il .sp, .u440-il .doc, .u440-il .fol, .u440-burst i {
+    animation: none !important;
+    transition: none !important;
+  }
+}

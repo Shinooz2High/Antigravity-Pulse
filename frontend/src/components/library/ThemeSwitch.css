@@ -1,0 +1,271 @@
+/* ThemeSwitch Component with Atmospheric Effects (Rain, Day/Night, Stars) */
+
+.ts-root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* Switch Sizes */
+.ts-sm { --ts-w: 64px; --ts-h: 32px; --ts-thumb: 24px; --ts-pad: 4px; --ts-shift: 32px; }
+.ts-md { --ts-w: 88px; --ts-h: 42px; --ts-thumb: 32px; --ts-pad: 5px; --ts-shift: 46px; }
+.ts-lg { --ts-w: 112px; --ts-h: 52px; --ts-thumb: 40px; --ts-pad: 6px; --ts-shift: 60px; }
+
+.ts-button {
+  position: relative;
+  width: var(--ts-w, 88px);
+  height: var(--ts-h, 42px);
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  isolation: isolate;
+  cursor: pointer;
+  background: #4FA8F7;
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.22),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.3),
+    0 4px 12px -2px rgba(15, 23, 42, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.15);
+  transition: transform 0.3s cubic-bezier(0.34, 1.45, 0.64, 1), box-shadow 0.3s ease;
+}
+
+.ts-button:hover {
+  transform: scale(1.03);
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.25),
+    0 8px 20px -4px rgba(15, 23, 42, 0.35),
+    0 0 0 1.5px var(--ux-accent, #6A57F2);
+}
+
+.ts-button:active {
+  transform: scale(0.97);
+}
+
+.ts-button:focus-visible {
+  outline: 2px solid var(--ux-accent, #6A57F2);
+  outline-offset: 3px;
+}
+
+/* Background Layers */
+.ts-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.ts-bg-light {
+  background: linear-gradient(180deg, #3B82F6 0%, #60A5FA 55%, #93C5FD 100%);
+  opacity: 1;
+}
+
+.ts-bg-dark {
+  background: linear-gradient(180deg, #090D1A 0%, #171E36 60%, #202747 100%);
+  opacity: 0;
+}
+
+.ts-button[aria-checked="true"] .ts-bg-light {
+  opacity: 0;
+}
+
+.ts-button[aria-checked="true"] .ts-bg-dark {
+  opacity: 1;
+}
+
+/* Rain Effect Layer */
+.ts-rain-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.ts-has-rain .ts-rain-layer {
+  opacity: 1;
+}
+
+.ts-rain-drop {
+  position: absolute;
+  width: 1.5px;
+  height: 10px;
+  background: linear-gradient(180deg, transparent, rgba(190, 225, 255, 0.75));
+  border-radius: 1px;
+  transform: rotate(18deg);
+  animation: ts-fall 0.8s linear infinite;
+}
+
+@keyframes ts-fall {
+  0% {
+    transform: translate(0, -14px) rotate(18deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-14px, 50px) rotate(18deg);
+    opacity: 0;
+  }
+}
+
+/* Rain splash ripples at the bottom */
+.ts-splash {
+  position: absolute;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 50%;
+  border: 1px solid rgba(190, 225, 255, 0.5);
+  transform: scale(0);
+  animation: ts-ripple 1.2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ts-ripple {
+  0% {
+    width: 2px;
+    opacity: 0.9;
+    transform: scale(0.2);
+  }
+  100% {
+    width: 14px;
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+/* Day clouds */
+.ts-clouds {
+  position: absolute;
+  right: -6px;
+  bottom: -8px;
+  width: 58px;
+  height: 32px;
+  pointer-events: none;
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease;
+}
+
+.ts-button[aria-checked="true"] .ts-clouds {
+  transform: translateY(28px);
+  opacity: 0;
+}
+
+/* Night Stars */
+.ts-stars {
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  width: 44px;
+  height: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-16px);
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease;
+}
+
+.ts-button[aria-checked="true"] .ts-stars {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ts-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  animation: ts-twinkle 2s ease-in-out infinite alternate;
+}
+
+@keyframes ts-twinkle {
+  0% { opacity: 0.3; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Sliding Thumb / Knob */
+.ts-thumb {
+  position: absolute;
+  left: var(--ts-pad, 5px);
+  top: var(--ts-pad, 5px);
+  width: var(--ts-thumb, 32px);
+  height: var(--ts-thumb, 32px);
+  border-radius: 50%;
+  pointer-events: none;
+  transition: transform 0.65s cubic-bezier(0.34, 1.45, 0.64, 1);
+  box-shadow: 
+    0 3px 8px rgba(0, 0, 0, 0.35),
+    inset -2px -2px 4px rgba(0, 0, 0, 0.2),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.6);
+}
+
+/* Light Thumb (Sun) */
+.ts-sun {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #FFF275 0%, #FFB703 65%, #FB8500 100%);
+  opacity: 1;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.ts-sun-rays {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.25) 40%, transparent 70%);
+  animation: ts-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes ts-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Dark Thumb (Moon) */
+.ts-moon {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #F8FAFC 0%, #E2E8F0 60%, #94A3B8 100%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.ts-crater {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(100, 116, 139, 0.45);
+  box-shadow: inset 1px 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+/* Checked (Dark) State */
+.ts-button[aria-checked="true"] .ts-thumb {
+  transform: translateX(var(--ts-shift, 46px));
+}
+
+.ts-button[aria-checked="true"] .ts-sun {
+  opacity: 0;
+  transform: rotate(180deg) scale(0.6);
+}
+
+.ts-button[aria-checked="true"] .ts-moon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-button, .ts-thumb, .ts-bg, .ts-clouds, .ts-stars, .ts-sun, .ts-moon {
+    transition: none !important;
+    animation: none !important;
+  }
+  .ts-rain-drop {
+    display: none;
+  }
+}

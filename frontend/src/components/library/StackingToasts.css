@@ -1,0 +1,194 @@
+/* Lucian UX/UI Prompt #070 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#070 */
+
+.u070-zone {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  z-index: 9999;
+  outline: none;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .u070-zone {
+    right: 16px;
+    left: 16px;
+    width: auto;
+    bottom: 96px; /* Above mobile bottom bar */
+  }
+}
+
+.u070-t {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 
+    0 0 0 1px rgba(15, 23, 42, 0.1),
+    0 16px 36px -12px rgba(15, 23, 42, 0.22);
+  transform-origin: 50% 100%;
+  transform: translate(var(--dx, 0px), var(--y, 0px)) scale(var(--s, 1));
+  opacity: var(--o, 1);
+  transition: transform .45s cubic-bezier(.34, 1.45, .64, 1), opacity .3s ease;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  color: #0f172a;
+}
+
+.dark .u070-t {
+  background: #111827;
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 18px 40px -12px rgba(0, 0, 0, 0.65);
+  color: #f8fafc;
+}
+
+.u070-t.drag {
+  transition: none;
+  cursor: grabbing;
+}
+.u070-t.enter {
+  transform: translateY(80px) scale(.9);
+  opacity: 0;
+}
+.u070-t.leave {
+  transform: translate(var(--dx, 0px), var(--y, 0px)) scale(var(--s, 1));
+  opacity: 0;
+  pointer-events: none;
+}
+.u070-t.leave.side {
+  transform: translate(calc(var(--dir, 1) * 440px), var(--y, 0px)) rotate(calc(var(--dir, 1) * 8deg));
+}
+.u070-t > * {
+  transition: opacity .25s;
+}
+.u070-t.back > * {
+  opacity: 0;
+}
+
+.u070-ic {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c) 15%, transparent);
+  color: var(--c);
+}
+.u070-ic svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.u070-ic i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.2px solid currentColor;
+  border-right-color: transparent;
+  animation: u070-spin .7s linear infinite;
+}
+@keyframes u070-spin {
+  to { transform: rotate(360deg); }
+}
+
+.u070-tx {
+  flex: 1;
+  min-width: 0;
+}
+.u070-tx b {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -.015em;
+  color: inherit;
+}
+.u070-tx small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .u070-tx small {
+  color: #94a3b8;
+}
+
+.u070-act {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+}
+.dark .u070-act {
+  background: #1e293b;
+}
+
+.u070-x {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.u070-x:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: inherit;
+}
+.u070-x svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.u070-bar {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--c);
+  opacity: .5;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--left, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u070-t { transition: none !important; }
+  .u070-ic i { animation: none !important; }
+}
