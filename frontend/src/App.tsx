@@ -863,27 +863,6 @@ export default function App() {
     );
   };
 
-  if (booting) {
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#090d16] text-slate-200">
-        <div className="h-9 w-9 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-        <p className="mt-3 text-xs text-slate-400">Đang khởi động Antigravity Pulse...</p>
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <AuthScreen
-        pairingInProgress={pairingInProgress}
-        initialError={authError}
-        onLogin={handleLogin}
-        onPairWithInput={handlePairWithInput}
-        onGoogleTokenLogin={handleGoogleTokenLogin}
-      />
-    );
-  }
-
   const conversations = useMemo(
     () => groupRunsIntoConversations(runs, conversationMap),
     [runs, conversationMap]
@@ -931,6 +910,27 @@ export default function App() {
     }
     notify('Đã gộp toàn bộ hội thoại thành 1 cuộc trò chuyện duy nhất', 'success');
   }, [runs, notify]);
+
+  if (booting) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#090d16] text-slate-200">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+        <p className="mt-3 text-xs text-slate-400">Đang khởi động Antigravity Pulse...</p>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <AuthScreen
+        pairingInProgress={pairingInProgress}
+        initialError={authError}
+        onLogin={handleLogin}
+        onPairWithInput={handlePairWithInput}
+        onGoogleTokenLogin={handleGoogleTokenLogin}
+      />
+    );
+  }
 
   const activeRunCount = runs.filter(
     (r) => r.status === 'running' || r.status === 'queued' || r.status === 'awaiting_approval'
