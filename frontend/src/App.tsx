@@ -82,7 +82,7 @@ export default function App() {
     }
   });
 
-  const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabKey>('prompt');
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -96,7 +96,7 @@ export default function App() {
   const [artifacts, setArtifacts] = useState<ArtifactItem[]>([]);
   const [defaultEngine, setDefaultEngine] = useState<EngineMode>('antigravity_sdk');
   const [defaultPolicy, setDefaultPolicy] = useState<ExecutionPolicy>('ask_mobile');
-  const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
+  const [currentModel, setCurrentModel] = useState<string>('gemini-4-argon');
 
   const [artifactModalTarget, setArtifactModalTarget] = useState<ArtifactModalTarget | null>(null);
   const [tunnelBusy, setTunnelBusy] = useState(false);
@@ -798,6 +798,20 @@ export default function App() {
         activeRunCount={activeRunCount}
         isDark={isDark}
         onToggleTheme={() => setIsDark((d) => !d)}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={setSelectedProjectId}
+        runs={runs}
+        selectedRunId={selectedRunId}
+        onSelectRun={(runId) => {
+          setSelectedRunId(runId);
+          setActiveTab('prompt');
+        }}
+        onNewConversation={() => {
+          setSelectedRunId(null);
+          setActiveTab('prompt');
+        }}
+        onOpenArtifact={setArtifactModalTarget}
       >
         {activeTab === 'dashboard' && (
           <DashboardPage

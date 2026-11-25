@@ -173,3 +173,9 @@ html.agy-custom-theme-active.dark main .rounded-2xl.border {
   -webkit-backdrop-filter: blur(var(--ct-glass-blur, 9px));
   padding: 2px;
 }
+
+html.agy-custom-theme-active .surface-composer-card {
+  background: var(--ct-composer-inner, rgba(10, 15, 28, 0.85)) !important;
+  backdrop-filter: blur(var(--ct-glass-blur, 9px)) !important;
+  -webkit-backdrop-filter: blur(var(--ct-glass-blur, 9px)) !important;
+}

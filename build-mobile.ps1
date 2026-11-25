@@ -146,6 +146,8 @@ if ($OpenXcode) {
     Pop-Location
 }
 
+$ApkInfoText = if ($ApkGenerated) { "   - File APK cài đặt: $BuildsDir\Antigravity-Pulse.apk" } else { "   - Cách tạo APK: Mở Android Studio hoặc dùng GitHub Actions" }
+
 Write-Host @"
 ======================================================
                TỔNG KẾT BUILD DI ĐỘNG
@@ -153,7 +155,7 @@ Write-Host @"
 1. Android Native Project:
    - Thư mục: $AndroidDir
    - Trạng thái: Sẵn sàng, đã tích hợp Camera QR, Theme StatusBar, DeepLink.
-$([string]($ApkGenerated ? "   - File APK cài đặt: $BuildsDir\Antigravity-Pulse.apk" : "   - Cách tạo APK: Mở Android Studio hoặc dùng GitHub Actions"))
+$ApkInfoText
 
 2. iOS Native Project:
    - Thư mục: $IosDir
