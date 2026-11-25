@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import re
 import secrets
 import shutil
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -64,11 +67,13 @@ class RunnerService:
         settings: SettingsService,
         project_service: ProjectService,
         ws_manager: WebSocketManager,
+        google_auth_service: Any = None,
     ) -> None:
         self.config = config
         self.settings = settings
         self.project_service = project_service
         self.ws_manager = ws_manager
+        self.google_auth = google_auth_service
 
         self.runs_dir = config.data_dir / "runs"
         self.uploads_dir = config.data_dir / "uploads"
@@ -676,7 +681,188 @@ class RunnerService:
 
     # --- Engine Implementations ---
 
+    async def _run_agy_stream_json(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        """Execute prompt using the official Antigravity CLI (`agy -p --output-format stream-json`),
+        leveraging the user's unified Google Antigravity account token in the OS secure keyring.
+        """
+        del run_dir
+        from .google_auth_service import find_agy_binary
+
+        agy_bin = find_agy_binary()
+        if not agy_bin:
+            raise RuntimeError(
+                "Không tìm thấy `agy` CLI trên máy tính PC. "
+                "Vui lòng cài Antigravity hoặc chuyển sang Đăng nhập Google OAuth / Gemini API Key trong Cài đặt."
+            )
+
+        if self.google_auth:
+            await self.google_auth.probe_agy_session(force=False)
+            resolved_model = self.google_auth.resolve_agy_model_id(self.settings.get_model())
+        else:
+            resolved_model = self.settings.get_model()
+
+        run = self.get_run(run_id)
+        prompt_body = run.prompt.strip()
+
+        if run.attachments:
+            att_lines: list[str] = []
+            for att in run.attachments:
+                try:
+                    att_path, _, mime = self.resolve_upload_raw(att.id)
+                    att_lines.append(f"- `{att.name}` ({mime}): `{att_path}`")
+                except Exception:
+                    continue
+            if att_lines:
+                prompt_body = (
+                    f"{prompt_body}\n\n"
+                    "Attached files uploaded from mobile (you can read/inspect these paths directly):\n"
+                    + "\n".join(att_lines)
+                )
+
+        argv: list[str] = [
+            agy_bin,
+            "-p",
+            prompt_body,
+            "--output-format",
+            "stream-json",
+            "--model",
+            resolved_model,
+        ]
+        if run.execution_policy == "read_only":
+            argv.extend(["--mode", "plan", "--sandbox"])
+        elif run.execution_policy == "ask_mobile":
+            argv.extend(["--mode", "auto", "--sandbox"])
+        else:
+            argv.append("--dangerously-skip-permissions")
+
+        await self._append_thought(
+            run_id,
+            f"🔐 Đang thực thi bằng **Token Tài khoản Antigravity (AGY)** — Model: `{resolved_model}` | Quyền: `{run.execution_policy}`\n",
+        )
+
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(project_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            limit=8 * 1024 * 1024,
+        )
+        self._active_procs[run_id] = proc
+
+        streamed_any_text = False
+        final_result_error: str | None = None
+        tool_by_step: dict[int, PromptToolCall] = {}
+
+        assert proc.stdout is not None
+        while True:
+            if run_id in self._cancelled_runs:
+                proc.terminate()
+                break
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            raw_line = line.decode("utf-8", errors="replace").strip()
+            if not raw_line:
+                continue
+            try:
+                evt = json.loads(raw_line)
+            except Exception:
+                await self._append_token(run_id, raw_line + "\n")
+                streamed_any_text = True
+                continue
+
+            if not isinstance(evt, dict):
+                continue
+
+            evt_type = evt.get("event")
+            if evt_type == "init":
+                conv_id = evt.get("conversation_id")
+                if conv_id:
+                    await self._append_thought(run_id, f"📎 Phiên AGY: `{conv_id}`\n")
+            elif evt_type == "step_update":
+                su = evt.get("step_update") or {}
+                if not isinstance(su, dict):
+                    continue
+                step_type = su.get("step_type")
+                state = su.get("state")
+                step_idx = int(su.get("step_index") or 0)
+
+                if step_type in ("thought", "thinking"):
+                    tdelta = su.get("text_delta") or su.get("thought") or ""
+                    if tdelta:
+                        await self._append_thought(run_id, str(tdelta))
+                elif step_type == "tool":
+                    t_name = str(su.get("tool_name") or (su.get("tool_info") or {}).get("name") or "tool")
+                    t_info = su.get("tool_info") if isinstance(su.get("tool_info"), dict) else {}
+                    t_args = t_info.get("parameters") if isinstance(t_info.get("parameters"), dict) else None
+                    tc_id = f"agy_step_{step_idx}"
+                    if state == "ACTIVE":
+                        ptc = PromptToolCall(
+                            id=tc_id,
+                            name=t_name,
+                            args=t_args,
+                            status="running",
+                            timestamp=utc_now_iso(),
+                        )
+                        tool_by_step[step_idx] = ptc
+                        await self._emit_tool_call(run_id, ptc)
+                    elif state in ("DONE", "ERROR", "FAILED"):
+                        prev = tool_by_step.get(step_idx)
+                        has_err = state in ("ERROR", "FAILED") or bool(t_info.get("error"))
+                        ptc = PromptToolCall(
+                            id=tc_id,
+                            name=t_name,
+                            args=t_args or (prev.args if prev else None),
+                            status="error" if has_err else "completed",
+                            timestamp=utc_now_iso(),
+                        )
+                        await self._emit_tool_call(run_id, ptc)
+                elif step_type == "agent_response":
+                    if su.get("thought_delta"):
+                        await self._append_thought(run_id, str(su["thought_delta"]))
+                    tdelta = su.get("text_delta")
+                    if tdelta:
+                        await self._append_token(run_id, str(tdelta))
+                        streamed_any_text = True
+            elif evt_type == "result":
+                res_obj = evt.get("result") or {}
+                if isinstance(res_obj, dict):
+                    res_status = str(res_obj.get("status") or "").upper()
+                    if res_status and res_status != "SUCCESS":
+                        final_result_error = str(res_obj.get("error") or f"AGY trả về trạng thái {res_status}")
+                    resp_full = res_obj.get("response")
+                    if resp_full and not streamed_any_text:
+                        await self._append_token(run_id, str(resp_full))
+                        streamed_any_text = True
+
+        stderr_bytes = b""
+        if proc.stderr is not None:
+            stderr_bytes = await proc.stderr.read()
+        rc = await proc.wait()
+
+        if run_id in self._cancelled_runs:
+            return
+        if final_result_error:
+            raise RuntimeError(final_result_error)
+        if rc != 0:
+            err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(err_msg or f"AGY CLI kết thúc với mã lỗi {rc}")
+
     async def _run_antigravity_sdk(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        if self.google_auth is not None and self.settings.get_auth_source() in ("auto", "agy_account"):
+            await self.google_auth.probe_agy_session(force=False)
+
+        effective_auth = (
+            self.google_auth.resolve_effective_auth_mode()
+            if self.google_auth is not None
+            else "api_key"
+        )
+
+        # Priority 1: Official Antigravity (AGY) Account Session
+        if effective_auth == "agy_account":
+            await self._run_agy_stream_json(run_id, project_path, run_dir)
+            return
+
         try:
             from google.antigravity import Agent, BuiltinTools, CapabilitiesConfig, LocalAgentConfig
             from google.antigravity import types as ga_types
@@ -686,11 +872,18 @@ class RunnerService:
 
         api_key = self.settings.get_effective_api_key()
         vertex_enabled, vertex_project, vertex_location = self.settings.get_effective_vertex()
-        if not api_key and not (vertex_enabled and vertex_project):
+
+        oauth_token: str | None = None
+        oauth_quota_project: str | None = None
+        if effective_auth == "google_oauth" and self.google_auth is not None:
+            oauth_token, oauth_quota_project = await asyncio.to_thread(
+                self.google_auth.get_valid_access_token
+            )
+
+        if not oauth_token and not api_key and not (vertex_enabled and vertex_project):
             raise RuntimeError(
-                "Chưa cấu hình GEMINI_API_KEY hoặc Vertex AI. "
-                "Vui lòng vào Cài đặt (Settings) trên điện thoại để nhập API Key, "
-                "hoặc chọn chế độ Demo Simulator / CLI Runner."
+                "Chưa cấu hình Token AGY, Tài khoản Google OAuth hoặc GEMINI_API_KEY. "
+                "Vui lòng vào Cài đặt (Settings) -> 'Đăng nhập Tài khoản Google & Token AGY' để kết nối."
             )
 
         run = self.get_run(run_id)
@@ -754,19 +947,48 @@ class RunnerService:
         sdk_state_dir.mkdir(parents=True, exist_ok=True)
         sdk_app_data.mkdir(parents=True, exist_ok=True)
 
+        selected_model = self.settings.get_model()
         cfg_kwargs: dict[str, Any] = {
             "workspaces": [str(project_path)],
             "capabilities": capabilities,
             "policies": policies_list,
-            "model": self.settings.get_model(),
             "save_dir": str(sdk_state_dir),
             "app_data_dir": str(sdk_app_data),
         }
-        if vertex_enabled and vertex_project:
+        if oauth_token:
+            headers: dict[str, str] = {"Authorization": f"Bearer {oauth_token}"}
+            effective_proj = vertex_project or oauth_quota_project
+            if effective_proj:
+                headers["x-goog-user-project"] = effective_proj
+            if vertex_enabled and effective_proj:
+                endpoint: Any = ga_types.VertexEndpoint(
+                    project=effective_proj,
+                    location=vertex_location,
+                    http_headers=headers,
+                )
+            else:
+                endpoint = ga_types.GeminiAPIEndpoint(
+                    base_url="https://generativelanguage.googleapis.com",
+                    http_headers=headers,
+                )
+            cfg_kwargs["models"] = [
+                ga_types.ModelTarget(
+                    name=selected_model,
+                    types=[ga_types.ModelType.TEXT],
+                    endpoint=endpoint,
+                )
+            ]
+            await self._append_thought(
+                run_id,
+                f"🔐 Đang thực thi bằng **Google OAuth 2.0 Token** — Model: `{selected_model}`\n",
+            )
+        elif vertex_enabled and vertex_project:
+            cfg_kwargs["model"] = selected_model
             cfg_kwargs["vertex"] = True
             cfg_kwargs["project"] = vertex_project
             cfg_kwargs["location"] = vertex_location
         else:
+            cfg_kwargs["model"] = selected_model
             cfg_kwargs["api_key"] = api_key
             cfg_kwargs["vertex"] = False
 
@@ -845,10 +1067,33 @@ class RunnerService:
             f"Chuẩn bị chạy CLI runner tại `{project_path}` (chính sách: `{run.execution_policy}`).\n",
         )
 
-        use_agy = agy_bin is not None and not prompt_text.startswith("$ ")
+        lowered_prompt = prompt_text.lower()
+        first_word = lowered_prompt.split()[0] if lowered_prompt.split() else ""
+        looks_like_shell_cmd = (
+            prompt_text.startswith("$ ")
+            or any(lowered_prompt == p or lowered_prompt.startswith(p + " ") for p in SAFE_READONLY_CLI_PREFIXES)
+            or first_word
+            in {
+                "remove-item",
+                "get-childitem",
+                "set-location",
+                "rm",
+                "del",
+                "echo",
+                "cat",
+                "type",
+                "npm",
+                "npx",
+                "pip",
+                "pytest",
+                "uvicorn",
+                "curl",
+            }
+        )
+        use_agy = agy_bin is not None and not looks_like_shell_cmd
         if use_agy and agy_bin:
-            cmd_display = f"agy {prompt_text}"
-            argv = [agy_bin, prompt_text]
+            await self._run_agy_stream_json(run_id, project_path, Path(self.runs_dir / run_id))
+            return
         else:
             raw_cmd = prompt_text[2:].strip() if prompt_text.startswith("$ ") else prompt_text
             cmd_display = raw_cmd

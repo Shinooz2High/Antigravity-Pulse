@@ -8,3 +8,5 @@ export * from './BreadcrumbPath';
 export * from './TypeToConfirmDeleteModal';
 export * from './AuroraBackground';
 export * from './ProductDropdown';
+export * from './GoogleSignInButton';
+export * from './ValidatedSignUpForm';

@@ -37,6 +37,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Print Antigravity Pulse pairing info and QR code.")
     parser.add_argument("--tunnel-url", default=None, help="Optional remote tunnel base URL.")
+    parser.add_argument("--short-url", default=None, help="Optional short memorable redirect URL.")
     args = parser.parse_args()
 
     cfg = AppConfig()
@@ -47,6 +48,8 @@ def main() -> None:
     if args.tunnel_url:
         base_url = args.tunnel_url.rstrip("/")
         pair_url = f"{base_url}/?pair={pair_token}"
+        if args.short_url:
+            print(f"Short URL    : {args.short_url.strip()}")
         print(f"Tunnel URL   : {base_url}")
         print(f"Tunnel Pair  : {pair_url}")
         print("\nScan QR code for remote access (4G/5G):")

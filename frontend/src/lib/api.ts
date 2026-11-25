@@ -10,6 +10,8 @@ import type {
   ExecutionPolicy,
   FileContentResponse,
   FileListResponse,
+  GoogleAuthStatus,
+  GoogleOAuthStartResponse,
   MobileBuildInfo,
   ModelListResponse,
   PairInfo,
@@ -599,5 +601,81 @@ export const api = {
 
   getMobilePackageDownloadUrl(platform: 'android' | 'ios'): string {
     return withToken(`/api/system/mobile-download/${platform}`);
+  },
+
+  // Google Account & Antigravity (AGY) Unified Auth
+  getGoogleAuthStatus(refresh = false): Promise<GoogleAuthStatus> {
+    const qs = refresh ? '?refresh=1' : '';
+    return apiFetch<GoogleAuthStatus>(`/api/system/google-auth/status${qs}`);
+  },
+
+  launchAgyLogin(): Promise<{ launched: boolean; message: string }> {
+    return apiFetch<{ launched: boolean; message: string }>('/api/system/google-auth/agy-login', {
+      method: 'POST',
+    });
+  },
+
+  activateAgyAccount(): Promise<GoogleAuthStatus> {
+    return apiFetch<GoogleAuthStatus>('/api/system/google-auth/agy-use-account', {
+      method: 'POST',
+    });
+  },
+
+  saveGoogleOAuthClient(payload: {
+    client_id?: string;
+    client_secret?: string;
+    client_json?: string;
+    quota_project_id?: string;
+  }): Promise<GoogleAuthStatus> {
+    return apiFetch<GoogleAuthStatus>('/api/system/google-auth/oauth-client', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  startGoogleOAuth(payload: {
+    open_on_pc?: boolean;
+    redirect_origin?: string;
+  }): Promise<GoogleOAuthStartResponse> {
+    return apiFetch<GoogleOAuthStartResponse>('/api/system/google-auth/oauth-start', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  completeGoogleOAuthManual(
+    callbackUrlOrCode: string,
+    state?: string
+  ): Promise<GoogleAuthStatus> {
+    return apiFetch<GoogleAuthStatus>('/api/system/google-auth/oauth-manual-callback', {
+      method: 'POST',
+      body: JSON.stringify({
+        callback_url_or_code: callbackUrlOrCode,
+        state: state || undefined,
+      }),
+    });
+  },
+
+  saveDirectGoogleToken(payload: {
+    access_token: string;
+    refresh_token?: string;
+    quota_project_id?: string;
+  }): Promise<GoogleAuthStatus> {
+    return apiFetch<GoogleAuthStatus>('/api/system/google-auth/direct-token', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  importGcloudAdc(): Promise<GoogleAuthStatus> {
+    return apiFetch<GoogleAuthStatus>('/api/system/google-auth/import-adc', {
+      method: 'POST',
+    });
+  },
+
+  logoutGoogleAccount(): Promise<GoogleAuthStatus> {
+    return apiFetch<GoogleAuthStatus>('/api/system/google-auth/logout', {
+      method: 'POST',
+    });
   },
 };

@@ -31,6 +31,7 @@ def _build_pair_info(request: Request) -> PairInfoResponse:
     tailscale_ip = get_tailscale_ip()
     tailscale_url = f"http://{tailscale_ip}:{port}" if tailscale_ip else None
     tunnel_url = tunnel.tunnel_url
+    tunnel_short_url = tunnel.tunnel_short_url
     preferred_url = tunnel_url or tailscale_url or lan_url
     pair_token = settings.get_pair_token()
     pair_url = f"{preferred_url}/?pair={pair_token}"
@@ -41,6 +42,7 @@ def _build_pair_info(request: Request) -> PairInfoResponse:
         lan_url=lan_url,
         tailscale_url=tailscale_url,
         tunnel_url=tunnel_url,
+        tunnel_short_url=tunnel_short_url,
         preferred_url=preferred_url,
         pair_url=pair_url,
         pin=pin,

@@ -91,9 +91,10 @@ KNOWN_QUOTAS: dict[str, dict[str, Any]] = {
 class ModelsService:
     """Manages models catalog and tracks daily quota consumption."""
 
-    def __init__(self, config: AppConfig, settings_service: Any) -> None:
+    def __init__(self, config: AppConfig, settings_service: Any, google_auth_service: Any = None) -> None:
         self.config = config
         self.settings = settings_service
+        self.google_auth = google_auth_service
         self._quota_status_file = config.data_dir / "quota_status.json"
         self._cached_api_models: list[dict[str, Any]] = []
         self._last_fetch_time: float = 0.0
@@ -115,14 +116,26 @@ class ModelsService:
         except Exception as e:
             logger.warning("Could not persist quota status: %s", e)
 
-    def _fetch_google_models(self, api_key: str) -> list[dict[str, Any]]:
+    def _fetch_google_models(
+        self,
+        api_key: str | None = None,
+        bearer_token: str | None = None,
+    ) -> list[dict[str, Any]]:
         now = time.time()
         if self._cached_api_models and (now - self._last_fetch_time < 300):
             return self._cached_api_models
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        headers: dict[str, str] = {"User-Agent": "AntigravityPulse/1.0"}
+        if api_key:
+            url = f"{url}?key={api_key}"
+        elif bearer_token:
+            headers["Authorization"] = f"Bearer {bearer_token}"
+        else:
+            return self._cached_api_models
+
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "AntigravityPulse/1.0"})
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=6.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 models = data.get("models", [])
@@ -146,17 +159,59 @@ class ModelsService:
         if not isinstance(exhaustion_data, dict):
             exhaustion_data = {}
 
-        # Default model order
-        known_keys = list(KNOWN_QUOTAS.keys())
+        catalog: dict[str, dict[str, Any]] = {k: dict(v) for k, v in KNOWN_QUOTAS.items()}
+        known_keys: list[str] = []
 
-        # If API key is present, also discover any new models
-        if api_key:
-            remote_models = self._fetch_google_models(api_key)
+        # 1. Prepend official Antigravity (AGY Account) models when AGY session is available
+        agy_models = self.google_auth.get_cached_agy_models() if self.google_auth else []
+        for am in agy_models:
+            m_id = am["id"]
+            m_name = am["display_name"]
+            lower_id = m_id.lower()
+            if "flash" in lower_id:
+                cat: Literal["flash", "pro", "experimental", "other"] = "flash"
+                d_limit, r_limit = 1500, 30
+                desc = f"Model tốc độ cao qua Token Tài khoản Antigravity (AGY) — {m_name}"
+            elif "hydrogen" in lower_id or "xhigh" in lower_id:
+                cat = "experimental"
+                d_limit, r_limit = 200, 10
+                desc = f"Model suy luận cực sâu qua Token Tài khoản Antigravity (AGY) — {m_name}"
+            else:
+                cat = "pro"
+                d_limit, r_limit = 500, 15
+                desc = f"Model cao cấp qua Token Tài khoản Antigravity (AGY) — {m_name}"
+
+            catalog[m_id] = {
+                "display_name": f"{m_name} [AGY]",
+                "description": desc,
+                "category": cat,
+                "daily_limit": d_limit,
+                "rpm_limit": r_limit,
+                "input_token_limit": 1048576,
+                "output_token_limit": 65536,
+            }
+            if m_id not in known_keys:
+                known_keys.append(m_id)
+
+        for k in KNOWN_QUOTAS:
+            if k not in known_keys:
+                known_keys.append(k)
+
+        # 2. Discover remote Gemini models using API key or Google OAuth token
+        bearer_token: str | None = None
+        if not api_key and self.google_auth and self.google_auth.has_google_oauth_session():
+            try:
+                bearer_token, _ = self.google_auth.get_valid_access_token()
+            except Exception:
+                bearer_token = None
+
+        if api_key or bearer_token:
+            remote_models = self._fetch_google_models(api_key=api_key, bearer_token=bearer_token)
             for rm in remote_models:
                 m_id = rm.get("name", "").replace("models/", "")
-                if m_id and m_id not in KNOWN_QUOTAS and ("flash" in m_id or "pro" in m_id):
+                if m_id and m_id not in catalog and ("flash" in m_id or "pro" in m_id):
                     is_pro = "pro" in m_id
-                    KNOWN_QUOTAS[m_id] = {
+                    catalog[m_id] = {
                         "display_name": rm.get("displayName") or m_id,
                         "description": rm.get("description") or "Google Gemini Model",
                         "category": "pro" if is_pro else "flash",
@@ -184,7 +239,7 @@ class ModelsService:
         now_ts = time.time()
 
         for mid in known_keys:
-            spec = KNOWN_QUOTAS[mid]
+            spec = catalog[mid]
             daily_limit = spec["daily_limit"]
             used = runs_today.get(mid, 0)
 

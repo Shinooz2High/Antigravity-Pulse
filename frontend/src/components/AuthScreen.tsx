@@ -22,7 +22,7 @@ import {
   subscribePwaInstallAvailability,
   triggerPwaInstall,
 } from '../lib/native';
-import { AuroraBackground } from './library';
+import { AuroraBackground, GoogleSignInButton, ValidatedSignUpForm } from './library';
 import { QrScannerModal } from './QrScannerModal';
 
 interface AuthScreenProps {
@@ -55,6 +55,7 @@ export function AuthScreen({
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [canInstallPwa, setCanInstallPwa] = useState(false);
+  const [authMode, setAuthMode] = useState<'connect' | 'signup'>('connect');
 
   useEffect(() => {
     return subscribePwaInstallAvailability(setCanInstallPwa);
@@ -202,7 +203,55 @@ export function AuthScreen({
               </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
+            <>
+              {/* Mode Switcher: Connect PC vs Sign Up (#244) */}
+              <div className="mt-4 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100/80 p-1 text-xs font-semibold dark:border-slate-700/80 dark:bg-[#090d16]/80">
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('connect')}
+                  className={`rounded-lg py-2 transition ${
+                    authMode === 'connect'
+                      ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Kết nối PC
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('signup')}
+                  className={`rounded-lg py-2 transition ${
+                    authMode === 'signup'
+                      ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Đăng ký
+                </button>
+              </div>
+
+              {authMode === 'signup' ? (
+                <div className="mt-4 space-y-3">
+                  <ValidatedSignUpForm
+                    onSuccess={(vals) => {
+                      if (vals.name.trim()) {
+                        setDevice(vals.name.trim());
+                        setDeviceName(vals.name.trim());
+                      }
+                      window.setTimeout(() => setAuthMode('connect'), 1100);
+                    }}
+                  />
+                  <div className="relative flex items-center py-0.5">
+                    <div className="flex-grow border-t border-slate-200 dark:border-slate-700/80" />
+                    <span className="mx-3 shrink-0 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      hoặc
+                    </span>
+                    <div className="flex-grow border-t border-slate-200 dark:border-slate-700/80" />
+                  </div>
+                  <GoogleSignInButton fullWidth />
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
               {/* Fast QR & Link Pairing Actions */}
               <div className="grid grid-cols-2 gap-2.5">
                 <button
@@ -316,6 +365,28 @@ export function AuthScreen({
                 {submitting ? 'Đang kết nối...' : 'Kết nối tới PC'}
               </button>
 
+              <div className="relative flex items-center py-1">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-700/80" />
+                <span className="mx-3 shrink-0 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                  hoặc
+                </span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-700/80" />
+              </div>
+
+              <GoogleSignInButton
+                fullWidth
+                disabled={submitting}
+                onSignIn={async () => {
+                  setError(null);
+                  const cleanedPin = pin.trim();
+                  const effectiveServer = showServerField ? serverInput.trim() : '';
+                  if (cleanedPin) {
+                    setDeviceName(device);
+                    await onLogin(cleanedPin, device, effectiveServer);
+                  }
+                }}
+              />
+
               {canInstallPwa && (
                 <button
                   type="button"
@@ -327,6 +398,8 @@ export function AuthScreen({
                 </button>
               )}
             </form>
+              )}
+            </>
           )}
         </div>
       </div>

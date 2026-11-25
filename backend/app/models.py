@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 EngineMode = Literal["antigravity_sdk", "cli", "demo"]
 ExecutionPolicy = Literal["read_only", "ask_mobile", "auto_workspace"]
+AuthSource = Literal["auto", "agy_account", "google_oauth", "api_key", "vertex_adc"]
+TunnelMode = Literal["cloudflare_quick", "serveo_ssh", "cloudflare_named"]
 ArtifactCategory = Literal["markdown", "image", "pdf", "code", "html", "document", "other"]
 ArtifactSource = Literal["antigravity_brain", "prompt_run", "project_workspace"]
 PromptRunStatus = Literal[
@@ -49,6 +51,7 @@ class PairInfoResponse(BaseModel):
     lan_url: str
     tailscale_url: str | None = None
     tunnel_url: str | None = None
+    tunnel_short_url: str | None = None
     preferred_url: str
     pair_url: str
     pin: str
@@ -308,13 +311,17 @@ class SystemStatusResponse(BaseModel):
     lan_url: str
     tailscale_url: str | None = None
     cloudflared_installed: bool
+    ssh_installed: bool = False
+    tunnel_mode: TunnelMode = "cloudflare_quick"
     tunnel_running: bool
     tunnel_url: str | None = None
+    tunnel_short_url: str | None = None
     connected_clients: int
     uptime_seconds: float
 
 
 class SystemSettingsResponse(BaseModel):
+    auth_source: AuthSource = "auto"
     gemini_api_key_set: bool
     gemini_api_key_masked: str | None = None
     vertex_enabled: bool
@@ -325,9 +332,17 @@ class SystemSettingsResponse(BaseModel):
     brain_dir: str
     model: str
     pin: str
+    tunnel_mode: TunnelMode = "cloudflare_quick"
+    tunnel_subdomain: str | None = None
+    tunnel_short_alias: str | None = None
+    tunnel_auto_shorten: bool = True
+    cloudflare_tunnel_token_set: bool = False
+    cloudflare_tunnel_token_masked: str | None = None
+    cloudflare_tunnel_url: str | None = None
 
 
 class UpdateSettingsRequest(BaseModel):
+    auth_source: AuthSource | None = None
     gemini_api_key: str | None = None
     clear_api_key: bool = False
     vertex_enabled: bool | None = None
@@ -338,11 +353,20 @@ class UpdateSettingsRequest(BaseModel):
     brain_dir: str | None = None
     model: str | None = None
     pin: str | None = None
+    tunnel_mode: TunnelMode | None = None
+    tunnel_subdomain: str | None = None
+    tunnel_short_alias: str | None = None
+    tunnel_auto_shorten: bool | None = None
+    cloudflare_tunnel_token: str | None = None
+    clear_cloudflare_tunnel_token: bool = False
+    cloudflare_tunnel_url: str | None = None
 
 
 class TunnelStartResponse(BaseModel):
     tunnel_running: bool
+    tunnel_mode: TunnelMode = "cloudflare_quick"
     tunnel_url: str | None = None
+    tunnel_short_url: str | None = None
     error: str | None = None
     install_hint: str | None = None
     tailscale_url: str | None = None
@@ -351,6 +375,7 @@ class TunnelStartResponse(BaseModel):
 class TunnelStopResponse(BaseModel):
     tunnel_running: bool
     tunnel_url: str | None = None
+    tunnel_short_url: str | None = None
 
 
 # --- Model & Quota Tracking ---
@@ -396,4 +421,62 @@ class MobileBuildInfo(BaseModel):
     android_project_ready: bool = False
     ios_project_ready: bool = False
     deep_link_pair_url: str | None = None
+
+
+# --- Google Account & Antigravity (AGY) Unified Auth ---
+
+
+class GoogleAuthStatusResponse(BaseModel):
+    auth_source: AuthSource = "auto"
+    effective_auth_source: str = "agy_account"
+    agy_cli_installed: bool = False
+    agy_authenticated: bool = False
+    agy_model_count: int = 0
+    agy_api_key_override: bool = False
+    agy_error: str | None = None
+    google_connected: bool = False
+    google_email: str | None = None
+    google_name: str | None = None
+    google_picture: str | None = None
+    google_token_source: str | None = None
+    google_has_refresh_token: bool = False
+    google_expires_in_seconds: int | None = None
+    google_scopes: list[str] = Field(default_factory=list)
+    google_connected_at: str | None = None
+    oauth_client_configured: bool = False
+    oauth_client_id_preview: str | None = None
+    quota_project_id: str | None = None
+    gcloud_adc_found: bool = False
+    gcloud_adc_path: str | None = None
+
+
+class GoogleOAuthClientRequest(BaseModel):
+    client_id: str | None = None
+    client_secret: str | None = None
+    client_json: str | None = None
+    quota_project_id: str | None = None
+
+
+class GoogleOAuthStartRequest(BaseModel):
+    open_on_pc: bool = False
+    redirect_origin: str | None = None
+
+
+class GoogleOAuthStartResponse(BaseModel):
+    auth_url: str
+    redirect_uri: str
+    state: str
+    opened_on_pc: bool = False
+
+
+class GoogleOAuthManualCallbackRequest(BaseModel):
+    callback_url_or_code: str
+    state: str | None = None
+
+
+class GoogleDirectTokenRequest(BaseModel):
+    access_token: str
+    refresh_token: str | None = None
+    quota_project_id: str | None = None
+
 

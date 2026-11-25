@@ -48,6 +48,7 @@ import {
   triggerPwaInstall,
 } from '../lib/native';
 import { cn, copyToClipboard, formatBytes, formatRelativeTime } from '../lib/utils';
+import { GoogleAgyAuthSection } from '../components/GoogleAgyAuthSection';
 import { QrScannerModal } from '../components/QrScannerModal';
 import type {
   DeviceInfo,
@@ -61,6 +62,7 @@ import type {
   SystemSettings,
   SystemStatus,
   TunnelActionResponse,
+  TunnelMode,
 } from '../types/api';
 
 interface SettingsPageProps {
@@ -122,6 +124,13 @@ export function SettingsPage({
   const [tunnelHint, setTunnelHint] = useState<{ error?: string | null; install_hint?: string | null } | null>(
     null
   );
+  const [tunnelMode, setTunnelMode] = useState<TunnelMode>('cloudflare_quick');
+  const [tunnelSubdomain, setTunnelSubdomain] = useState('');
+  const [tunnelShortAlias, setTunnelShortAlias] = useState('');
+  const [tunnelAutoShorten, setTunnelAutoShorten] = useState(true);
+  const [cfTunnelUrl, setCfTunnelUrl] = useState('');
+  const [cfTunnelTokenInput, setCfTunnelTokenInput] = useState('');
+  const [savingTunnelConfig, setSavingTunnelConfig] = useState(false);
   const [localDeviceName, setLocalDeviceName] = useState(() => getDeviceName());
   const [mobileBuilds, setMobileBuilds] = useState<MobileBuildInfo | null>(null);
   const [serverUrlEdit, setServerUrlEdit] = useState(() => getServerUrl());
@@ -212,6 +221,11 @@ export function SettingsPage({
       setModelName(sysSettings.model || '');
       setBrainDir(sysSettings.brain_dir || '');
       setSettingsPin(sysSettings.pin || '');
+      setTunnelMode(sysSettings.tunnel_mode || 'cloudflare_quick');
+      setTunnelSubdomain(sysSettings.tunnel_subdomain || '');
+      setTunnelShortAlias(sysSettings.tunnel_short_alias || '');
+      setTunnelAutoShorten(sysSettings.tunnel_auto_shorten ?? true);
+      setCfTunnelUrl(sysSettings.cloudflare_tunnel_url || '');
     } catch (err) {
       onNotify(
         err instanceof Error ? err.message : 'Không thể tải cấu hình hệ thống',
@@ -312,6 +326,48 @@ export function SettingsPage({
       setTunnelHint({ error: res.error, install_hint: res.install_hint });
     } else {
       setTunnelHint(null);
+    }
+  };
+
+  const handleSaveTunnelConfig = async () => {
+    setSavingTunnelConfig(true);
+    try {
+      const updated = await api.updateSystemSettings({
+        tunnel_mode: tunnelMode,
+        tunnel_subdomain: tunnelSubdomain.trim(),
+        tunnel_short_alias: tunnelShortAlias.trim(),
+        tunnel_auto_shorten: tunnelAutoShorten,
+        cloudflare_tunnel_url: cfTunnelUrl.trim(),
+        cloudflare_tunnel_token: cfTunnelTokenInput.trim() || undefined,
+      });
+      setSettings(updated);
+      setCfTunnelTokenInput('');
+      setTunnelHint(null);
+      await onRefreshSystem();
+      onNotify(
+        systemStatus?.tunnel_running
+          ? 'Đã lưu cấu hình Tunnel. Tắt và bật lại Tunnel để áp dụng link mới.'
+          : 'Đã lưu cấu hình Tunnel ngắn & dễ nhớ',
+        'success'
+      );
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Không thể lưu cấu hình Tunnel', 'error');
+    } finally {
+      setSavingTunnelConfig(false);
+    }
+  };
+
+  const handleClearCfTunnelToken = async () => {
+    if (!window.confirm('Xóa Cloudflare Tunnel Token đã lưu?')) return;
+    setSavingTunnelConfig(true);
+    try {
+      const updated = await api.updateSystemSettings({ clear_cloudflare_tunnel_token: true });
+      setSettings(updated);
+      onNotify('Đã xóa Cloudflare Tunnel Token', 'info');
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Không thể xóa Token', 'error');
+    } finally {
+      setSavingTunnelConfig(false);
     }
   };
 
@@ -476,10 +532,10 @@ export function SettingsPage({
             <Globe className="h-5 w-5 text-indigo-400" />
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Truy cập mạng (LAN / Tailscale / Cloudflare Tunnel)
+                Truy cập mạng & Tunnel ngắn dễ nhớ
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Mở Tunnel HTTPS công khai khi đi ra ngoài mạng Wi-Fi nội bộ
+                Chọn chế độ Tunnel để có link ngắn dễ nhớ khi đi ra ngoài mạng Wi-Fi nội bộ
               </p>
             </div>
           </div>
@@ -499,14 +555,209 @@ export function SettingsPage({
             {tunnelBusy
               ? 'Đang xử lý...'
               : systemStatus?.tunnel_running
-                ? 'Tắt Cloudflare Tunnel'
-                : 'Bật Cloudflare Tunnel'}
+                ? 'Tắt Tunnel'
+                : 'Bật Tunnel'}
           </button>
+        </div>
+
+        {/* Tunnel Mode Selector & Short URL Config */}
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Chế độ Tunnel
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {(
+              [
+                {
+                  id: 'cloudflare_quick' as TunnelMode,
+                  title: 'Cloudflare + Link ngắn',
+                  desc: 'Ổn định nhất, tự tạo is.gd/...',
+                },
+                {
+                  id: 'serveo_ssh' as TunnelMode,
+                  title: 'Serveo SSH',
+                  desc: 'Miễn phí: ten.serveo.net',
+                },
+                {
+                  id: 'cloudflare_named' as TunnelMode,
+                  title: 'Tên miền riêng (CF)',
+                  desc: 'Cố định vĩnh viễn',
+                },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setTunnelMode(opt.id)}
+                className={cn(
+                  'rounded-xl border px-3 py-2.5 text-left transition',
+                  tunnelMode === opt.id
+                    ? 'border-cyan-500 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-[#111827] dark:text-slate-300'
+                )}
+              >
+                <p className="text-xs font-bold">{opt.title}</p>
+                <p className="mt-0.5 text-[11px] opacity-80">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2.5">
+            {tunnelMode === 'cloudflare_quick' && (
+              <>
+                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-800 dark:bg-[#111827]">
+                  <div>
+                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                      Tự động tạo link rút gọn dễ nhớ (is.gd / tinyurl)
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Gõ link ngắn trên trình duyệt điện thoại để mở thẳng ứng dụng
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={tunnelAutoShorten}
+                    onChange={(e) => setTunnelAutoShorten(e.target.checked)}
+                    className="h-4 w-4 accent-cyan-500"
+                  />
+                </label>
+
+                {tunnelAutoShorten && (
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      Tên link ngắn tùy chọn (5-30 ký tự chữ/số/_, bỏ trống = tự động)
+                    </label>
+                    <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#111827]">
+                      <span className="border-r border-slate-200 bg-slate-100 px-3 py-2.5 font-mono text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
+                        https://is.gd/
+                      </span>
+                      <input
+                        type="text"
+                        value={tunnelShortAlias}
+                        onChange={(e) => setTunnelShortAlias(e.target.value)}
+                        placeholder="agypulse_pc"
+                        className="min-h-[40px] flex-1 bg-transparent px-3 font-mono text-xs text-slate-900 outline-none dark:text-white"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {tunnelMode === 'serveo_ssh' && (
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  Tên miền phụ mong muốn (không cần tài khoản, dùng OpenSSH có sẵn)
+                </label>
+                <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#111827]">
+                  <span className="border-r border-slate-200 bg-slate-100 px-2.5 py-2.5 font-mono text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
+                    https://
+                  </span>
+                  <input
+                    type="text"
+                    value={tunnelSubdomain}
+                    onChange={(e) => setTunnelSubdomain(e.target.value)}
+                    placeholder="agypulse"
+                    className="min-h-[40px] flex-1 bg-transparent px-3 font-mono text-xs text-slate-900 outline-none dark:text-white"
+                  />
+                  <span className="border-l border-slate-200 bg-slate-100 px-2.5 py-2.5 font-mono text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
+                    .serveo.net
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {tunnelMode === 'cloudflare_named' && (
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    Tên miền cố định (Public Hostname)
+                  </label>
+                  <input
+                    type="text"
+                    value={cfTunnelUrl}
+                    onChange={(e) => setCfTunnelUrl(e.target.value)}
+                    placeholder="https://pc.tenmien.com"
+                    className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      Cloudflare Tunnel Token
+                    </label>
+                    {settings?.cloudflare_tunnel_token_set && (
+                      <button
+                        type="button"
+                        onClick={handleClearCfTunnelToken}
+                        className="text-[11px] font-medium text-rose-500 hover:underline"
+                      >
+                        Xóa Token
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    value={cfTunnelTokenInput}
+                    onChange={(e) => setCfTunnelTokenInput(e.target.value)}
+                    placeholder={
+                      settings?.cloudflare_tunnel_token_set
+                        ? `Đã lưu (${settings.cloudflare_tunnel_token_masked || '***'})`
+                        : 'Dán token từ Cloudflare Zero Trust...'
+                    }
+                    className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                disabled={savingTunnelConfig}
+                onClick={handleSaveTunnelConfig}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3.5 text-xs font-semibold text-cyan-700 hover:bg-cyan-500/20 disabled:opacity-50 dark:text-cyan-300"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {savingTunnelConfig ? 'Đang lưu...' : 'Lưu cấu hình Tunnel'}
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 space-y-2 text-xs">
           {systemStatus && (
             <>
+              {systemStatus.tunnel_short_url && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5">
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                    Link ngắn dễ nhớ:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('Link ngắn Tunnel', systemStatus.tunnel_short_url!)}
+                    className="inline-flex items-center gap-1.5 font-mono text-sm font-bold text-emerald-700 hover:underline dark:text-emerald-200"
+                  >
+                    {systemStatus.tunnel_short_url}
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-slate-800 dark:bg-[#090d16]">
+                <span className="text-slate-500 dark:text-slate-400">Tunnel URL:</span>
+                {systemStatus.tunnel_url ? (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('Tunnel URL', systemStatus.tunnel_url!)}
+                    className="inline-flex items-center gap-1.5 break-all text-right font-mono font-medium text-emerald-600 hover:underline dark:text-emerald-300"
+                  >
+                    {systemStatus.tunnel_url}
+                    <Copy className="h-3 w-3 shrink-0" />
+                  </button>
+                ) : (
+                  <span className="font-mono font-medium text-slate-400">Chưa kích hoạt</span>
+                )}
+              </div>
               <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-slate-800 dark:bg-[#090d16]">
                 <span className="text-slate-500 dark:text-slate-400">LAN URL:</span>
                 <button
@@ -529,31 +780,42 @@ export function SettingsPage({
                   </button>
                 </div>
               )}
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-slate-800 dark:bg-[#090d16]">
-                <span className="text-slate-500 dark:text-slate-400">Tunnel URL:</span>
-                <span className="font-mono font-medium text-emerald-600 dark:text-emerald-300">
-                  {systemStatus.tunnel_url || 'Chưa kích hoạt'}
-                </span>
-              </div>
             </>
           )}
 
-          {(!systemStatus?.cloudflared_installed || tunnelHint) && (
+          {((tunnelMode !== 'serveo_ssh' && !systemStatus?.cloudflared_installed) ||
+            (tunnelMode === 'serveo_ssh' && systemStatus?.ssh_installed === false) ||
+            tunnelHint) && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
               <p className="font-semibold">
-                {tunnelHint?.error || 'Chưa phát hiện cloudflared trên máy tính PC.'}
+                {tunnelHint?.error ||
+                  (tunnelMode === 'serveo_ssh'
+                    ? 'Chưa phát hiện OpenSSH Client (ssh) trên máy tính PC.'
+                    : 'Chưa phát hiện cloudflared trên máy tính PC.')}
               </p>
               <p className="mt-1">
-                Cài nhanh trên Windows bằng lệnh:{' '}
+                Gợi ý:{' '}
                 <code className="rounded bg-black/20 px-1.5 py-0.5 font-mono">
-                  {tunnelHint?.install_hint || 'winget install Cloudflare.cloudflared'}
-                </code>{' '}
-                hoặc dùng Tailscale VPN để truy cập an toàn.
+                  {tunnelHint?.install_hint ||
+                    (tunnelMode === 'serveo_ssh'
+                      ? 'Bật OpenSSH Client trong Windows Optional Features'
+                      : 'winget install Cloudflare.cloudflared')}
+                </code>
               </p>
             </div>
           )}
         </div>
       </section>
+
+      {/* Google Account & Antigravity (AGY) Unified Auth */}
+      <GoogleAgyAuthSection
+        onAuthChanged={async () => {
+          await onRefreshSystem();
+          await loadData();
+          await fetchModelsList(false);
+        }}
+        onNotify={onNotify}
+      />
 
       {/* AI Engine & API Settings */}
       <form

@@ -36,7 +36,8 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, P
     monkeypatch.setenv("AGY_DEFAULT_PROJECT", str(workspace_dir))
     monkeypatch.setenv("AGY_FRONTEND_DIST", str(frontend_dist))
     monkeypatch.setenv("AGY_BRIDGE_PIN", "123456")
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("AGY_AUTH_SOURCE", "api_key")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
 
     return {
         "tmp": tmp_path,

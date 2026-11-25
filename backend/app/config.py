@@ -28,6 +28,12 @@ class AppConfig(BaseSettings):
     agy_frontend_dist: str | None = Field(default=None, alias="AGY_FRONTEND_DIST")
     agy_default_project: str | None = Field(default=None, alias="AGY_DEFAULT_PROJECT")
     agy_model: str | None = Field(default=None, alias="AGY_MODEL")
+    agy_auth_source: str | None = Field(default=None, alias="AGY_AUTH_SOURCE")
+    agy_tunnel_mode: str | None = Field(default=None, alias="AGY_TUNNEL_MODE")
+    agy_tunnel_subdomain: str | None = Field(default=None, alias="AGY_TUNNEL_SUBDOMAIN")
+    agy_tunnel_short_alias: str | None = Field(default=None, alias="AGY_TUNNEL_SHORT_ALIAS")
+    cloudflare_tunnel_token: str | None = Field(default=None, alias="CLOUDFLARE_TUNNEL_TOKEN")
+    cloudflare_tunnel_url: str | None = Field(default=None, alias="CLOUDFLARE_TUNNEL_URL")
 
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     google_genai_use_vertexai: bool = Field(default=False, alias="GOOGLE_GENAI_USE_VERTEXAI")

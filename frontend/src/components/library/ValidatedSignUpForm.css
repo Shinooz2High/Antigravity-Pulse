@@ -1,0 +1,349 @@
+/* Lucian UX/UI Prompt #244 · Validated Sign-Up Form with Live Error Summary */
+.u244-wrap {
+  --ux-surface: #FFFFFF;
+  --ux-surface-2: #F5F3EF;
+  --ux-ink: #16151B;
+  --ux-ink-2: #57535F;
+  --ux-ink-3: #8E8A97;
+  --ux-line: rgba(22, 21, 27, .12);
+  --ux-accent: #6A57F2;
+  --ux-ease: cubic-bezier(.2, .8, .2, 1);
+  --ux-spring: cubic-bezier(.34, 1.45, .64, 1);
+  position: relative;
+  width: 100%;
+  color: var(--ux-ink);
+}
+
+.dark .u244-wrap,
+:root[data-theme="dark"] .u244-wrap {
+  --ux-surface: #13141C;
+  --ux-surface-2: rgba(15, 23, 42, .72);
+  --ux-ink: #F4F0E8;
+  --ux-ink-2: rgba(244, 240, 232, .72);
+  --ux-ink-3: rgba(244, 240, 232, .45);
+  --ux-line: rgba(255, 255, 255, .12);
+  --ux-accent: #B7A4FF;
+}
+
+.u244-sc {
+  max-height: 460px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 2px 2px 4px;
+}
+
+.u244-sc::-webkit-scrollbar {
+  display: none;
+}
+
+.u244-hd h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 850;
+  letter-spacing: -.03em;
+  color: var(--ux-ink);
+}
+
+.u244-hd p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ux-ink-3);
+}
+
+.u244-sm {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  transition: grid-template-rows .4s cubic-bezier(.3, 1, .4, 1), margin .4s;
+}
+
+.u244-sm > div {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.u244-wrap.is-err .u244-sm {
+  grid-template-rows: 1fr;
+  margin-top: 12px;
+}
+
+.u244-sb {
+  padding: 11px 13px;
+  border-radius: 13px;
+  background: color-mix(in srgb, #E11D48 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #E11D48 34%, transparent);
+}
+
+.u244-sb b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #E11D48;
+}
+
+.dark .u244-sb b,
+:root[data-theme="dark"] .u244-sb b {
+  color: #FDA4AF;
+}
+
+.u244-sb b i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #E11D48;
+  color: #fff;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+}
+
+.u244-sb ul {
+  margin: 6px 0 0;
+  padding: 0 0 0 22px;
+  font-size: 11.5px;
+  font-weight: 650;
+  list-style: disc;
+}
+
+.u244-sb li {
+  margin-top: 2px;
+  transition: opacity .25s;
+}
+
+.u244-sb li.is-fixed {
+  opacity: .4;
+  text-decoration: line-through;
+}
+
+.u244-sb a {
+  color: #BE123C;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.dark .u244-sb a,
+:root[data-theme="dark"] .u244-sb a {
+  color: #FDA4AF;
+}
+
+.u244-fd {
+  margin-top: 12px;
+}
+
+.u244-fd label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ux-ink-2);
+}
+
+.u244-bx {
+  position: relative;
+  margin-top: 5px;
+}
+
+.u244-in {
+  width: 100%;
+  height: 44px;
+  padding: 0 38px 0 13px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ux-surface-2);
+  box-shadow: inset 0 0 0 1.5px var(--ux-line);
+  color: var(--ux-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+  transition: box-shadow .2s;
+}
+
+.u244-in:focus {
+  box-shadow: inset 0 0 0 2px var(--ux-accent);
+}
+
+.u244-fd.is-bad .u244-in {
+  box-shadow: inset 0 0 0 2px #E11D48;
+}
+
+.u244-fd.is-good .u244-in {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, #10B981 65%, transparent);
+}
+
+.u244-fd.is-shake .u244-bx {
+  animation: u244-sh .4s;
+}
+
+@keyframes u244-sh {
+  20%, 60% {
+    transform: translateX(-5px);
+  }
+  40%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+.u244-ok {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #10B981;
+  transform: scale(0);
+  transition: transform .35s cubic-bezier(.3, 1.7, .5, 1);
+  pointer-events: none;
+}
+
+.u244-ok::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.u244-fd.is-good .u244-ok {
+  transform: none;
+}
+
+.u244-ms {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .3s cubic-bezier(.3, 1, .4, 1);
+}
+
+.u244-ms > div {
+  min-height: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 650;
+  color: #E11D48;
+}
+
+.dark .u244-ms > div,
+:root[data-theme="dark"] .u244-ms > div {
+  color: #FDA4AF;
+}
+
+.u244-ms > div > span {
+  display: block;
+  padding-top: 4px;
+}
+
+.u244-fd.is-bad .u244-ms {
+  grid-template-rows: 1fr;
+}
+
+.u244-ag {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ux-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.u244-ag i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1.5px var(--ux-line);
+  display: grid;
+  place-items: center;
+  transition: background .2s, box-shadow .2s;
+}
+
+.u244-ag[aria-checked="true"] i {
+  background: var(--ux-accent);
+  box-shadow: none;
+}
+
+.u244-ag[aria-checked="true"] i::after {
+  content: "";
+  width: 4px;
+  height: 8px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.u244-ag.is-bad i {
+  box-shadow: inset 0 0 0 2px #E11D48;
+}
+
+.u244-ag.is-shake {
+  animation: u244-sh .4s;
+}
+
+.u244-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  height: 46px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--ux-ink);
+  color: var(--ux-surface);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .3s, transform .15s;
+}
+
+.u244-go:hover {
+  filter: brightness(1.08);
+}
+
+.u244-go:active {
+  transform: scale(.98);
+}
+
+.u244-go.is-done {
+  background: #059669;
+  color: #FFFFFF;
+}
+
+.u244-wrap button:focus-visible,
+.u244-wrap a:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u244-sm,
+  .u244-ms,
+  .u244-ok {
+    transition: none;
+  }
+  .u244-fd.is-shake .u244-bx,
+  .u244-ag.is-shake {
+    animation: none;
+  }
+}

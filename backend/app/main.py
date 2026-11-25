@@ -13,10 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from .config import AppConfig
-from .routers import antigravity, auth, projects, prompts, system, ws
+from .routers import antigravity, auth, google_auth, projects, prompts, system, ws
 from .services.auth_service import AuthService
 from .services.brain_scanner import BrainScanner
 from .services.file_watcher import FileWatcherService
+from .services.google_auth_service import GoogleAuthService
 from .services.models_service import ModelsService
 from .services.project_service import ProjectService
 from .services.runner_service import RunnerService
@@ -49,24 +50,35 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     cfg = config or AppConfig()
 
     settings_service = SettingsService(cfg)
-    models_service = ModelsService(cfg, settings_service)
+    google_auth_service = GoogleAuthService(cfg, settings_service)
+    models_service = ModelsService(cfg, settings_service, google_auth_service)
     auth_service = AuthService(settings_service)
     ws_manager = WebSocketManager()
     project_service = ProjectService(cfg, settings_service)
     brain_scanner = BrainScanner(settings_service)
-    tunnel_service = TunnelService(cfg.agy_port, ws_manager)
-    runner_service = RunnerService(cfg, settings_service, project_service, ws_manager)
+    tunnel_service = TunnelService(cfg.agy_port, ws_manager, settings_service)
+    runner_service = RunnerService(
+        cfg,
+        settings_service,
+        project_service,
+        ws_manager,
+        google_auth_service=google_auth_service,
+    )
     file_watcher = FileWatcherService(settings_service, project_service, ws_manager)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         ws_manager.set_event_loop(asyncio.get_running_loop())
         runner_service.start()
+        probe_task: asyncio.Task[Any] | None = None
         if start_watcher:
+            probe_task = asyncio.create_task(google_auth_service.probe_agy_session(force=False))
             file_watcher.start()
         try:
             yield
         finally:
+            if probe_task is not None and not probe_task.done():
+                probe_task.cancel()
             file_watcher.stop()
             await runner_service.stop()
             await tunnel_service.stop()
@@ -80,6 +92,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     app.state.config = cfg
     app.state.start_monotonic = time.monotonic()
     app.state.settings_service = settings_service
+    app.state.google_auth_service = google_auth_service
     app.state.models_service = models_service
     app.state.auth_service = auth_service
     app.state.ws_manager = ws_manager
@@ -98,6 +111,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     )
 
     app.include_router(auth.router)
+    app.include_router(google_auth.router)
     app.include_router(projects.router)
     app.include_router(antigravity.router)
     app.include_router(prompts.router)

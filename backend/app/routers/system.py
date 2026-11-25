@@ -62,7 +62,16 @@ async def system_status(
     api_key_configured = bool(settings.get_effective_api_key())
     vertex_enabled, vertex_project, _ = settings.get_effective_vertex()
     vertex_configured = bool(vertex_enabled and vertex_project)
-    sdk_configured = bool(sdk_installed and (api_key_configured or vertex_configured))
+    google_auth = getattr(request.app.state, "google_auth_service", None)
+    google_oauth_ok = bool(google_auth and google_auth.has_google_oauth_session())
+    agy_cli_present = (
+        shutil.which("agy") is not None
+        or (Path.home() / ".gemini" / "bin" / ("agy.exe" if os.name == "nt" else "agy")).exists()
+    )
+    sdk_configured = bool(
+        (sdk_installed and (api_key_configured or vertex_configured or google_oauth_ok))
+        or (agy_cli_present and settings.get_auth_source() in ("auto", "agy_account"))
+    )
 
     lan_ip = get_lan_ip()
     lan_url = f"http://{lan_ip}:{port}"
@@ -78,10 +87,7 @@ async def system_status(
         sdk_configured=sdk_configured,
         api_key_configured=api_key_configured,
         vertex_configured=vertex_configured,
-        agy_cli_found=(
-            shutil.which("agy") is not None
-            or (Path.home() / ".gemini" / "bin" / ("agy.exe" if os.name == "nt" else "agy")).exists()
-        ),
+        agy_cli_found=agy_cli_present,
         brain_dir=str(scanner.brain_dir),
         brain_session_count=len(scanner.list_sessions()),
         lan_ip=lan_ip,
@@ -89,8 +95,11 @@ async def system_status(
         lan_url=lan_url,
         tailscale_url=tailscale_url,
         cloudflared_installed=tunnel.is_cloudflared_installed(),
+        ssh_installed=tunnel.is_ssh_installed(),
+        tunnel_mode=tunnel.active_mode,
         tunnel_running=tunnel.is_running,
         tunnel_url=tunnel.tunnel_url,
+        tunnel_short_url=tunnel.tunnel_short_url,
         connected_clients=ws_manager.connected_count(),
         uptime_seconds=round(max(0.0, time.monotonic() - start_time), 1),
     )
@@ -140,6 +149,9 @@ async def list_models(
     request: Request,
     _: dict[str, Any] = Depends(require_auth),
 ) -> ModelListResponse:
+    google_auth = getattr(request.app.state, "google_auth_service", None)
+    if google_auth is not None:
+        await google_auth.probe_agy_session(force=False)
     models_service: ModelsService = request.app.state.models_service
     runner = getattr(request.app.state, "runner_service", None)
     return models_service.list_models_with_quota(runner)

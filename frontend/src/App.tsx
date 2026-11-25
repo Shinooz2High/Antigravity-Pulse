@@ -560,7 +560,9 @@ export default function App() {
               ? {
                   ...prev,
                   tunnel_running: Boolean(p.tunnel_running),
+                  tunnel_mode: (p.tunnel_mode as SystemStatus['tunnel_mode']) ?? prev.tunnel_mode,
                   tunnel_url: (p.tunnel_url as string | null) ?? null,
+                  tunnel_short_url: (p.tunnel_short_url as string | null) ?? null,
                 }
               : prev
           );
@@ -575,9 +577,15 @@ export default function App() {
           }
           break;
         }
+
+        case 'system.google_auth_changed': {
+          refreshSystem();
+          window.dispatchEvent(new CustomEvent('agy:google-auth-changed'));
+          break;
+        }
       }
     },
-    [pushBrowserNotification, refreshArtifacts, refreshProjects, refreshSessions]
+    [pushBrowserNotification, refreshArtifacts, refreshProjects, refreshSessions, refreshSystem]
   );
 
   const { wsStatus, reconnectNow } = usePulseSocket({
@@ -709,12 +717,12 @@ export default function App() {
         ? await api.stopTunnel()
         : await api.startTunnel();
       await refreshSystem();
-      if (res.tunnel_running && res.tunnel_url) {
-        notify(`Đã mở Tunnel: ${res.tunnel_url}`, 'success');
+      if (res.tunnel_running && (res.tunnel_short_url || res.tunnel_url)) {
+        notify(`Đã mở Tunnel: ${res.tunnel_short_url || res.tunnel_url}`, 'success');
       } else if (!res.tunnel_running && res.error) {
         notify(res.error, 'error');
       } else {
-        notify('Đã tắt Cloudflare Tunnel', 'info');
+        notify('Đã tắt Tunnel', 'info');
       }
       return res;
     } catch (err) {

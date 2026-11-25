@@ -1,5 +1,7 @@
 export type EngineMode = 'antigravity_sdk' | 'cli' | 'demo';
 export type ExecutionPolicy = 'read_only' | 'ask_mobile' | 'auto_workspace';
+export type AuthSource = 'auto' | 'agy_account' | 'google_oauth' | 'api_key' | 'vertex_adc';
+export type TunnelMode = 'cloudflare_quick' | 'serveo_ssh' | 'cloudflare_named';
 export type ArtifactCategory =
   | 'markdown'
   | 'image'
@@ -38,6 +40,7 @@ export interface PairInfo {
   lan_url: string;
   tailscale_url: string | null;
   tunnel_url: string | null;
+  tunnel_short_url?: string | null;
   preferred_url: string;
   pair_url: string;
   pin: string;
@@ -227,13 +230,17 @@ export interface SystemStatus {
   lan_url: string;
   tailscale_url: string | null;
   cloudflared_installed: boolean;
+  ssh_installed?: boolean;
+  tunnel_mode?: TunnelMode;
   tunnel_running: boolean;
   tunnel_url: string | null;
+  tunnel_short_url?: string | null;
   connected_clients: number;
   uptime_seconds: number;
 }
 
 export interface SystemSettings {
+  auth_source?: AuthSource;
   gemini_api_key_set: boolean;
   gemini_api_key_masked: string | null;
   vertex_enabled: boolean;
@@ -244,9 +251,17 @@ export interface SystemSettings {
   brain_dir: string;
   model: string;
   pin: string;
+  tunnel_mode?: TunnelMode;
+  tunnel_subdomain?: string | null;
+  tunnel_short_alias?: string | null;
+  tunnel_auto_shorten?: boolean;
+  cloudflare_tunnel_token_set?: boolean;
+  cloudflare_tunnel_token_masked?: string | null;
+  cloudflare_tunnel_url?: string | null;
 }
 
 export interface SystemSettingsUpdate {
+  auth_source?: AuthSource;
   gemini_api_key?: string;
   clear_api_key?: boolean;
   vertex_enabled?: boolean;
@@ -257,11 +272,20 @@ export interface SystemSettingsUpdate {
   brain_dir?: string;
   model?: string;
   pin?: string;
+  tunnel_mode?: TunnelMode;
+  tunnel_subdomain?: string;
+  tunnel_short_alias?: string;
+  tunnel_auto_shorten?: boolean;
+  cloudflare_tunnel_token?: string;
+  clear_cloudflare_tunnel_token?: boolean;
+  cloudflare_tunnel_url?: string;
 }
 
 export interface TunnelActionResponse {
   tunnel_running: boolean;
+  tunnel_mode?: TunnelMode;
   tunnel_url?: string | null;
+  tunnel_short_url?: string | null;
   error?: string | null;
   install_hint?: string | null;
   tailscale_url?: string | null;
@@ -303,6 +327,37 @@ export interface MobileBuildInfo {
   android_project_ready: boolean;
   ios_project_ready: boolean;
   deep_link_pair_url: string | null;
+}
+
+export interface GoogleAuthStatus {
+  auth_source: AuthSource;
+  effective_auth_source: string;
+  agy_cli_installed: boolean;
+  agy_authenticated: boolean;
+  agy_model_count: number;
+  agy_api_key_override: boolean;
+  agy_error: string | null;
+  google_connected: boolean;
+  google_email: string | null;
+  google_name: string | null;
+  google_picture: string | null;
+  google_token_source: string | null;
+  google_has_refresh_token: boolean;
+  google_expires_in_seconds: number | null;
+  google_scopes: string[];
+  google_connected_at: string | null;
+  oauth_client_configured: boolean;
+  oauth_client_id_preview: string | null;
+  quota_project_id: string | null;
+  gcloud_adc_found: boolean;
+  gcloud_adc_path: string | null;
+}
+
+export interface GoogleOAuthStartResponse {
+  auth_url: string;
+  redirect_uri: string;
+  state: string;
+  opened_on_pc: boolean;
 }
 
 export interface WsEnvelope {
