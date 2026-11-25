@@ -72,12 +72,45 @@ Bộ cài sẽ tự động làm toàn bộ:
 
 ---
 
-## Danh sách file cài đặt
+## 5. Gỡ cài đặt (Uninstall)
+
+### Windows PC
+- **Cách A — Gỡ 1 chạm từ mạng (dành cho bản cài qua `agypulse.dpdns.org`):**
+  1. Tải & bấm đúp **[`go-antigravity-pulse.bat`](https://agypulse.dpdns.org/go-antigravity-pulse.bat)**, hoặc
+  2. Dán 1 dòng vào PowerShell:
+     ```powershell
+     irm https://agypulse.dpdns.org/uninstall.ps1 | iex
+     ```
+  Script sẽ tự động dừng server (port 8765) & `cloudflared`, xóa Shortcut ngoài Desktop, xóa `%USERPROFILE%\AntigravityPulse` và dọn tệp tạm trong `%TEMP%` *(không gỡ Python, Node.js hay Git của máy)*.
+- **Cách B — Gỡ / dọn sạch trong thư mục mã nguồn cục bộ (Offline):**
+  Nhấp đúp **[`uninstall-pc.bat`](uninstall-pc.bat)** hoặc chạy PowerShell:
+  ```powershell
+  .\install\uninstall-pc.ps1
+  ```
+  - Thêm `-KeepData` nếu muốn giữ lại `backend\data` và `.env`.
+  - Thêm `-RemoveCloudflared` nếu muốn gỡ luôn `cloudflared`.
+
+### Android
+- **App APK / PWA:** Nhấn giữ biểu tượng **Antigravity Pulse** trên màn hình chính → chọn **Gỡ cài đặt** (*Uninstall*).
+- **Gỡ qua cáp USB (ADB):** Chạy `.\install\uninstall-android.ps1` (gỡ gói `com.antigravity.pulse`).
+
+### iPhone / iPad (iOS)
+- Nhấn giữ biểu tượng **Antigravity Pulse** trên màn hình chính → chọn **Xóa dấu trang / Xóa ứng dụng** (*Delete Bookmark / Remove App*).
+
+### Thu hồi quyền Google Account (tùy chọn)
+- Nếu đã dùng *Continue with Google*, bạn có thể thu hồi quyền truy cập bất kỳ lúc nào tại **[myaccount.google.com/permissions](https://myaccount.google.com/permissions)**.
+
+---
+
+## Danh sách file cài đặt & gỡ cài đặt
 
 | File | Vị trí | Chức năng |
 | --- | --- | --- |
 | `cai-antigravity-pulse.bat` | `frontend/public/` ([tải online](https://agypulse.dpdns.org/cai-antigravity-pulse.bat)) | File `.bat` bấm đúp để tải & cài 1 chạm trên bất kỳ Windows PC nào. |
 | `install.ps1` | `frontend/public/` ([script online](https://agypulse.dpdns.org/install.ps1)) | Script PowerShell cài tự động 1 dòng (`irm https://agypulse.dpdns.org/install.ps1 \| iex`). |
-| `install-pc.bat` | `install/` | Bộ cài offline trên Windows khi đã tải sẵn mã nguồn. |
-| `install-pc.ps1` | `install/` | Script PowerShell cài đặt Backend, Frontend PWA, `.env` và Shortcut Desktop (offline). |
+| `go-antigravity-pulse.bat` | `frontend/public/` ([tải online](https://agypulse.dpdns.org/go-antigravity-pulse.bat)) | File `.bat` bấm đúp để gỡ cài đặt 1 chạm trên Windows PC. |
+| `uninstall.ps1` | `frontend/public/` ([script online](https://agypulse.dpdns.org/uninstall.ps1)) | Script PowerShell gỡ cài đặt 1 dòng (`irm https://agypulse.dpdns.org/uninstall.ps1 \| iex`). |
+| `install-pc.bat` / `install-pc.ps1` | `install/` | Bộ cài offline trên Windows khi đã tải sẵn mã nguồn. |
 | `install-android.ps1` | `install/` | Script cài file `.apk` sang điện thoại Android qua cáp USB (`adb`) hoặc mở trang tải APK. |
+| `uninstall-pc.bat` / `uninstall-pc.ps1` | `install/` | Bộ gỡ cài đặt / dọn sạch môi trường & dữ liệu cục bộ trên Windows PC. |
+| `uninstall-android.ps1` | `install/` | Script gỡ ứng dụng Android (`com.antigravity.pulse`) qua cáp USB (`adb`). |

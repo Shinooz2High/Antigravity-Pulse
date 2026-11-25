@@ -101,6 +101,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | --- | --- |
 | `frontend/public/manifest.webmanifest` | Web App Manifest cho phép cài đặt app lên màn hình chính điện thoại (PWA). |
 | `frontend/public/terms.html`, `privacy.html` | Trang web tĩnh Điều Khoản Dịch Vụ và Chính Sách Bảo Mật phục vụ tại `agypulse.dpdns.org/terms.html` và `/privacy.html` (dùng cho Google OAuth Consent Screen & Mobile Store). |
+| `frontend/public/install.ps1`, `cai-antigravity-pulse.bat`, `uninstall.ps1`, `go-antigravity-pulse.bat` | Bộ script cài đặt & gỡ cài đặt 1 chạm phục vụ trực tiếp qua `https://agypulse.dpdns.org`. |
 | `frontend/public/install.ps1` | Script cài đặt 1 dòng trên Windows PC phục vụ tại `https://agypulse.dpdns.org/install.ps1`. |
 | `frontend/public/cai-antigravity-pulse.bat` | File `.bat` bấm đúp cài đặt 1 chạm trên Windows phục vụ tại `https://agypulse.dpdns.org/cai-antigravity-pulse.bat`. |
 | `frontend/public/_redirects` | Quy tắc định tuyến SPA (`/* /index.html 200`) cho hosting tĩnh. |

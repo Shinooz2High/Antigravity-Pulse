@@ -163,6 +163,18 @@ npm.cmd run typecheck
 
 ---
 
+## Gỡ cài đặt / Uninstall
+
+- **Windows PC (1 chạm):** Tải **[`go-antigravity-pulse.bat`](https://agypulse.dpdns.org/go-antigravity-pulse.bat)** hoặc chạy trong PowerShell:
+  ```powershell
+  irm https://agypulse.dpdns.org/uninstall.ps1 | iex
+  ```
+  *(Hoặc chạy [`install/uninstall-pc.bat`](install/uninstall-pc.bat) nếu bạn clone repo thủ công.)*
+- **Android / iOS:** Nhấn giữ biểu tượng **Antigravity Pulse** trên màn hình chính → chọn **Gỡ cài đặt / Xóa ứng dụng** (hoặc chạy `.\install\uninstall-android.ps1` qua ADB).
+- **Thu hồi quyền Google (tùy chọn):** [myaccount.google.com/permissions](https://myaccount.google.com/permissions)
+
+---
+
 ## Giấy phép & Pháp lý / License & Legal
 
 - **Giấy phép / License:** [MIT License](LICENSE)
