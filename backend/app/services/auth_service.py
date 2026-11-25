@@ -79,6 +79,18 @@ class AuthService:
             )
         return self._issue_token(device_name)
 
+    def login_with_google_profile(
+        self,
+        *,
+        email: str | None = None,
+        name: str | None = None,
+        device_name: str | None = None,
+    ) -> AuthTokenResponse:
+        label = (name or email or "Google Account").strip()
+        dev = (device_name or "").strip()
+        combined = f"{label} ({dev})" if dev and label.lower() not in dev.lower() else label
+        return self._issue_token(combined)
+
     def validate_token(self, token: str | None, touch: bool = True) -> dict[str, Any] | None:
         if not token:
             return None

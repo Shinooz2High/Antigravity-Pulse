@@ -373,6 +373,81 @@ export const api = {
     return res.devices ?? [];
   },
 
+  // Pre-auth "Continue with Google" Login
+  getPublicGoogleLoginInfo(): Promise<{
+    oauth_client_configured: boolean;
+    agy_authenticated: boolean;
+    is_local_request: boolean;
+    redirect_uri_hint: string;
+  }> {
+    return apiFetch('/api/auth/google/info');
+  },
+
+  startPublicGoogleLogin(payload: {
+    device_name?: string;
+    redirect_origin?: string;
+    open_on_pc?: boolean;
+  }): Promise<GoogleOAuthStartResponse> {
+    return apiFetch<GoogleOAuthStartResponse>('/api/auth/google/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        device_name: payload.device_name || getDeviceName(),
+      }),
+    });
+  },
+
+  pollPublicGoogleLogin(state: string): Promise<{
+    ready: boolean;
+    token?: string;
+    expires_at?: string;
+    device_id?: string;
+    email?: string;
+    name?: string;
+  }> {
+    return apiFetch(`/api/auth/google/poll?state=${encodeURIComponent(state)}`);
+  },
+
+  loginWithLocalAgyGoogle(deviceName?: string): Promise<AuthTokenResponse> {
+    return apiFetch<AuthTokenResponse>('/api/auth/google/local-agy', {
+      method: 'POST',
+      body: JSON.stringify({
+        device_name: deviceName || getDeviceName(),
+      }),
+    });
+  },
+
+  setupAndStartPublicGoogleLogin(payload: {
+    pin: string;
+    client_id?: string;
+    client_secret?: string;
+    client_json?: string;
+    device_name?: string;
+    redirect_origin?: string;
+  }): Promise<GoogleOAuthStartResponse> {
+    return apiFetch<GoogleOAuthStartResponse>('/api/auth/google/setup-and-start', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        device_name: payload.device_name || getDeviceName(),
+      }),
+    });
+  },
+
+  loginWithDirectGoogleToken(payload: {
+    pin: string;
+    access_token: string;
+    device_name?: string;
+  }): Promise<AuthTokenResponse> {
+    return apiFetch<AuthTokenResponse>('/api/auth/google/login-token', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        device_name: payload.device_name || getDeviceName(),
+      }),
+    });
+  },
+
   // Projects
   async getProjects(): Promise<Project[]> {
     const res = await apiFetch<{ projects: Project[] }>('/api/projects');

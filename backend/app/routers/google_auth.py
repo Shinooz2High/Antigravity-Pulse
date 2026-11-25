@@ -153,10 +153,57 @@ async def google_oauth_callback(
     settings = request.app.state.settings_service
     try:
         info = await asyncio.to_thread(svc.complete_oauth_callback, code=code, state=state)
-        settings.update(UpdateSettingsRequest(auth_source="google_oauth"))
+        if info.get("_purpose") != "app_login" or settings.get_auth_source() == "api_key":
+            settings.update(UpdateSettingsRequest(auth_source="google_oauth"))
         status = await svc.get_status(force_probe=False)
         await request.app.state.ws_manager.broadcast("system.google_auth_changed", status.model_dump())
-        email = html.escape(str(info.get("email") or "Google Account"))
+
+        email_raw = str(info.get("email") or "Google Account")
+        name_raw = str(info.get("name") or email_raw)
+        email = html.escape(email_raw)
+
+        # If initiated from the pre-auth Login screen ("Continue with Google"), also mint a real app session token!
+        login_script = ""
+        if info.get("_purpose") == "app_login":
+            auth_svc = request.app.state.auth_service
+            tok_resp = auth_svc.login_with_google_profile(
+                email=email_raw,
+                name=name_raw,
+                device_name=info.get("_device_name"),
+            )
+            svc.store_login_result(
+                state,
+                {
+                    "token": tok_resp.token,
+                    "expires_at": tok_resp.expires_at,
+                    "device_id": tok_resp.device_id,
+                    "email": email_raw,
+                    "name": name_raw,
+                },
+            )
+            import json as _json
+            msg_json = _json.dumps(
+                {
+                    "type": "AGY_GOOGLE_APP_LOGIN_SUCCESS",
+                    "token": tok_resp.token,
+                    "expires_at": tok_resp.expires_at,
+                    "device_id": tok_resp.device_id,
+                    "email": email_raw,
+                    "name": name_raw,
+                }
+            )
+            safe_state_q = urllib.parse.quote(state, safe="")
+            login_script = (
+                f"var _p = {msg_json};"
+                "try { if (window.opener) { window.opener.postMessage(_p, '*'); setTimeout(function(){ window.close(); }, 900); } "
+                f"else {{ window.location.replace('/?google_login_state={safe_state_q}'); }} }} catch (e) {{ window.location.replace('/?google_login_state={safe_state_q}'); }}"
+            )
+        else:
+            login_script = (
+                "try { if (window.opener) { window.opener.postMessage({ type: 'AGY_GOOGLE_OAUTH_SUCCESS' }, '*'); } } catch (e) {}"
+                "setTimeout(function(){ window.close(); }, 1800);"
+            )
+
         return HTMLResponse(
             content=(
                 "<!doctype html><html><head><meta charset='utf-8'>"
@@ -165,15 +212,12 @@ async def google_oauth_callback(
                 "<body style='font-family:system-ui;background:#090d16;color:#e2e8f0;padding:2.5rem 1.5rem;text-align:center'>"
                 "<div style='max-width:420px;margin:0 auto;background:#111827;border:1px solid #1e293b;border-radius:20px;padding:1.75rem'>"
                 "<div style='font-size:42px'>✅</div>"
-                "<h2 style='color:#34d399;margin:0.5rem 0'>Đã kết nối Tài khoản Google!</h2>"
+                "<h2 style='color:#34d399;margin:0.5rem 0'>Đăng nhập Google thành công!</h2>"
                 f"<p style='color:#cbd5e1;font-size:14px'>Tài khoản: <strong>{email}</strong></p>"
-                "<p style='color:#94a3b8;font-size:12px'>Token đã được lưu an toàn trên PC cho Antigravity Pulse. Cửa sổ này sẽ tự đóng...</p>"
+                "<p style='color:#94a3b8;font-size:12px'>Đang chuyển vào Antigravity Pulse...</p>"
                 "<button onclick='window.close()' style='margin-top:1rem;background:#06b6d4;color:#020617;border:0;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer'>Đóng cửa sổ</button>"
                 "</div>"
-                "<script>"
-                "try { if (window.opener) { window.opener.postMessage({ type: 'AGY_GOOGLE_OAUTH_SUCCESS' }, '*'); } } catch (e) {}"
-                "setTimeout(function(){ window.close(); }, 1800);"
-                "</script></body></html>"
+                f"<script>{login_script}</script></body></html>"
             ),
             status_code=200,
         )

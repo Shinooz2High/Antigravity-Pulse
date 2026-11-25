@@ -125,3 +125,65 @@ def test_google_oauth_pkce_flow_and_callback(tmp_path: Path) -> None:
     r_out = client.post("/api/system/google-auth/logout", headers=headers)
     assert r_out.status_code == 200
     assert r_out.json()["google_connected"] is False
+
+
+def test_public_continue_with_google_app_login_flow(tmp_path: Path) -> None:
+    client = _make_client(tmp_path)
+
+    # Setup + Start pre-auth Google login using PIN once
+    r_start = client.post(
+        "/api/auth/google/setup-and-start",
+        json={
+            "pin": "123456",
+            "client_id": "99999-test.apps.googleusercontent.com",
+            "client_secret": "sec_999",
+            "device_name": "Phone Chrome",
+            "redirect_origin": "https://demo.trycloudflare.com",
+        },
+    )
+    assert r_start.status_code == 200
+    start_data = r_start.json()
+    assert start_data["redirect_uri"] == "https://demo.trycloudflare.com/api/system/google-auth/callback"
+    state = start_data["state"]
+
+    # Before callback completes, poll returns ready=False
+    r_poll_before = client.get(f"/api/auth/google/poll?state={state}")
+    assert r_poll_before.status_code == 200
+    assert r_poll_before.json()["ready"] is False
+
+    # Simulate Google OAuth callback
+    svc = client.app.state.google_auth_service
+    with (
+        patch.object(
+            svc,
+            "_http_post_form",
+            return_value={
+                "access_token": "ya29.app_login_tok",
+                "refresh_token": "1//refresh_tok",
+                "expires_in": 3600,
+                "scope": "openid email profile",
+            },
+        ),
+        patch.object(
+            svc,
+            "_fetch_google_profile",
+            return_value={"email": "user@gmail.com", "name": "Test Google User"},
+        ),
+    ):
+        r_cb = client.get(f"/api/system/google-auth/callback?code=code_abc&state={state}")
+        assert r_cb.status_code == 200
+        assert "AGY_GOOGLE_APP_LOGIN_SUCCESS" in r_cb.text
+
+    # Poll returns ready=True with a valid Antigravity Pulse bearer token!
+    r_poll_after = client.get(f"/api/auth/google/poll?state={state}")
+    assert r_poll_after.status_code == 200
+    polled = r_poll_after.json()
+    assert polled["ready"] is True
+    assert polled["email"] == "user@gmail.com"
+    bearer = polled["token"]
+
+    # Verify the minted session token authenticates normal app endpoints!
+    r_status = client.get("/api/auth/status", headers={"Authorization": f"Bearer {bearer}"})
+    assert r_status.status_code == 200
+    assert r_status.json()["authenticated"] is True
+

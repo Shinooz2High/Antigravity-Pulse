@@ -82,8 +82,10 @@ class GoogleAuthService:
         self.auth_file = config.data_dir / "google_auth.json"
         self._lock = threading.RLock()
         self._data: dict[str, Any] = {}
-        # state -> {code_verifier, redirect_uri, created_at}
+        # state -> {code_verifier, redirect_uri, created_at, purpose, device_name}
         self._pending_states: dict[str, dict[str, Any]] = {}
+        # state -> {token, expires_at, device_id, email, name, created_at}
+        self._completed_login_states: dict[str, dict[str, Any]] = {}
 
         # Cached AGY CLI probe
         self._agy_probe_lock = asyncio.Lock()
@@ -338,6 +340,8 @@ class GoogleAuthService:
         *,
         redirect_uri: str,
         open_on_pc: bool = False,
+        purpose: str = "settings",
+        device_name: str | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             client_id = str(self._data.get("oauth_client_id") or os.environ.get("GOOGLE_OAUTH_CLIENT_ID") or "").strip()
@@ -363,6 +367,8 @@ class GoogleAuthService:
                 "code_verifier": verifier,
                 "redirect_uri": redirect_uri,
                 "created_at": now,
+                "purpose": purpose,
+                "device_name": device_name,
             }
 
         params = {
@@ -501,7 +507,32 @@ class GoogleAuthService:
             self._data["connected_at"] = utc_now_iso()
             self._save()
 
-        return self._data
+        return {
+            **self._data,
+            "_purpose": pending.get("purpose", "settings"),
+            "_device_name": pending.get("device_name"),
+        }
+
+    def store_login_result(self, state: str, payload: dict[str, Any]) -> None:
+        now = time.time()
+        with self._lock:
+            self._completed_login_states = {
+                k: v for k, v in self._completed_login_states.items() if now - v.get("created_at", 0) < 300
+            }
+            self._completed_login_states[state] = {**payload, "created_at": now}
+
+    def consume_login_result(self, state: str) -> dict[str, Any] | None:
+        now = time.time()
+        with self._lock:
+            self._completed_login_states = {
+                k: v for k, v in self._completed_login_states.items() if now - v.get("created_at", 0) < 300
+            }
+            return self._completed_login_states.pop(state, None)
+
+    def is_oauth_client_configured(self) -> bool:
+        with self._lock:
+            client_id = str(self._data.get("oauth_client_id") or os.environ.get("GOOGLE_OAUTH_CLIENT_ID") or "").strip()
+        return bool(client_id)
 
     def save_direct_access_token(
         self,

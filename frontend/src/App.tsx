@@ -171,6 +171,37 @@ export default function App() {
         setServerUrl(serverParam);
       }
       const pairToken = url.searchParams.get('pair');
+      const googleLoginState = url.searchParams.get('google_login_state');
+
+      if (googleLoginState) {
+        setPairingInProgress(true);
+        try {
+          const polled = await api.pollPublicGoogleLogin(googleLoginState);
+          url.searchParams.delete('google_login_state');
+          const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+          window.history.replaceState({}, document.title, cleanUrl);
+          if (!cancelled && polled.ready && polled.token) {
+            setToken(polled.token);
+            setAuthError(null);
+            setAuthenticated(true);
+          } else if (!cancelled) {
+            setAuthError('Phiên đăng nhập Google đã hết hạn. Vui lòng bấm Continue with Google lại.');
+            setAuthenticated(false);
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setAuthError(err instanceof Error ? err.message : 'Đăng nhập Google thất bại.');
+            setAuthenticated(false);
+          }
+        } finally {
+          if (!cancelled) {
+            setPairingInProgress(false);
+            setBooting(false);
+          }
+          hideNativeSplash().catch(() => undefined);
+        }
+        return;
+      }
 
       if (pairToken) {
         setPairingInProgress(true);
@@ -770,6 +801,16 @@ export default function App() {
     notify('Đã gửi thông báo thử nghiệm', 'info');
   };
 
+  const handleGoogleTokenLogin = (token: string, label?: string) => {
+    setToken(token);
+    setAuthError(null);
+    setAuthenticated(true);
+    notify(
+      label ? `Đã đăng nhập bằng Google: ${label}` : 'Đã đăng nhập bằng Tài khoản Google!',
+      'success'
+    );
+  };
+
   if (booting) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#090d16] text-slate-200">
@@ -786,6 +827,7 @@ export default function App() {
         initialError={authError}
         onLogin={handleLogin}
         onPairWithInput={handlePairWithInput}
+        onGoogleTokenLogin={handleGoogleTokenLogin}
       />
     );
   }

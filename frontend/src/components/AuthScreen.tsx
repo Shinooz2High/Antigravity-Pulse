@@ -1,27 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Activity,
   Camera,
   ClipboardPaste,
+  Copy,
   Download,
+  ExternalLink,
   Globe,
   KeyRound,
   QrCode,
   Smartphone,
   Sparkles,
+  Upload,
+  X,
 } from 'lucide-react';
 import {
+  api,
   getDeviceName,
   getServerUrl,
   parsePairingInput,
   setDeviceName,
+  setServerUrl,
 } from '../lib/api';
 import {
   getMobilePlatform,
   isNativeApp,
+  openExternalLink,
   subscribePwaInstallAvailability,
   triggerPwaInstall,
 } from '../lib/native';
+import { copyToClipboard } from '../lib/utils';
 import { AuroraBackground, GoogleSignInButton, ValidatedSignUpForm } from './library';
 import { QrScannerModal } from './QrScannerModal';
 
@@ -34,6 +42,7 @@ interface AuthScreenProps {
     deviceName: string,
     fallbackServerUrl?: string
   ) => Promise<void>;
+  onGoogleTokenLogin: (token: string, label?: string) => void;
 }
 
 export function AuthScreen({
@@ -41,6 +50,7 @@ export function AuthScreen({
   initialError,
   onLogin,
   onPairWithInput,
+  onGoogleTokenLogin,
 }: AuthScreenProps) {
   const native = isNativeApp();
   const platform = getMobilePlatform();
@@ -57,11 +67,230 @@ export function AuthScreen({
   const [canInstallPwa, setCanInstallPwa] = useState(false);
   const [authMode, setAuthMode] = useState<'connect' | 'signup'>('connect');
 
+  // Inline Google OAuth 1-time setup drawer when OAuth Client ID isn't configured yet on PC
+  const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
+  const [googleSetupTab, setGoogleSetupTab] = useState<'oauth' | 'token'>('oauth');
+  const [redirectUriHint, setRedirectUriHint] = useState('');
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthClientSecret, setOauthClientSecret] = useState('');
+  const [oauthClientJson, setOauthClientJson] = useState('');
+  const [directGoogleToken, setDirectGoogleToken] = useState('');
+  const [setupPin, setSetupPin] = useState('');
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [copiedRedirect, setCopiedRedirect] = useState(false);
+  const clientJsonFileRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     return subscribePwaInstallAvailability(setCanInstallPwa);
   }, []);
 
   const displayError = error || initialError;
+
+  const launchGoogleOAuthPopupAndWait = async (authUrl: string, state: string): Promise<void> => {
+    let popup: Window | null = null;
+    if (native) {
+      await openExternalLink(authUrl);
+    } else {
+      popup = window.open(
+        authUrl,
+        'agy_google_app_login',
+        'width=520,height=680,menubar=no,toolbar=no,status=no'
+      );
+      if (!popup) {
+        // Popup blocked (common on mobile Safari/Chrome): redirect in same tab; callback returns /?google_login_state=
+        window.location.href = authUrl;
+        return;
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        window.removeEventListener('message', onMsg);
+        window.clearInterval(pollTimer);
+        window.clearTimeout(timeoutTimer);
+      };
+
+      const finishOk = (token: string, label?: string) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        onGoogleTokenLogin(token, label);
+        resolve();
+      };
+
+      const finishErr = (msg: string) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        setError(msg);
+        reject(new Error(msg));
+      };
+
+      const onMsg = (ev: MessageEvent) => {
+        if (
+          ev.data &&
+          typeof ev.data === 'object' &&
+          ev.data.type === 'AGY_GOOGLE_APP_LOGIN_SUCCESS' &&
+          typeof ev.data.token === 'string'
+        ) {
+          finishOk(ev.data.token, ev.data.email || ev.data.name);
+        }
+      };
+
+      window.addEventListener('message', onMsg);
+
+      const pollTimer = window.setInterval(async () => {
+        try {
+          const res = await api.pollPublicGoogleLogin(state);
+          if (res.ready && res.token) {
+            finishOk(res.token, res.email || res.name);
+            return;
+          }
+        } catch {
+          // Ignore transient poll errors
+        }
+        if (popup && popup.closed && !settled) {
+          // Give 1 final poll tick in case callback just completed before window closed
+          window.setTimeout(async () => {
+            if (settled) return;
+            try {
+              const finalRes = await api.pollPublicGoogleLogin(state);
+              if (finalRes.ready && finalRes.token) {
+                finishOk(finalRes.token, finalRes.email || finalRes.name);
+                return;
+              }
+            } catch {
+              // Ignore
+            }
+            finishErr('Cửa sổ đăng nhập Google đã đóng trước khi hoàn tất.');
+          }, 500);
+        }
+      }, 1200);
+
+      const timeoutTimer = window.setTimeout(() => {
+        finishErr('Quá thời gian chờ đăng nhập Google (2 phút). Vui lòng thử lại.');
+      }, 120000);
+    });
+  };
+
+  const handleContinueWithGoogle = async () => {
+    setError(null);
+    const effectiveServer = showServerField ? serverInput.trim() : '';
+    if (native && !effectiveServer) {
+      const msg =
+        'Vui lòng nhập Địa chỉ Máy chủ PC (hoặc quét QR) trước khi đăng nhập bằng Google.';
+      setError(msg);
+      throw new Error(msg);
+    }
+    if (effectiveServer) {
+      setServerUrl(effectiveServer);
+    }
+    setDeviceName(device);
+
+    const info = await api.getPublicGoogleLoginInfo();
+    setRedirectUriHint(info.redirect_uri_hint);
+
+    // 1. Standard Google OAuth 2.0 Sign-In (works on localhost, Cloudflare Tunnel, mobile & desktop!)
+    if (info.oauth_client_configured) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const started = await api.startPublicGoogleLogin({
+        device_name: device,
+        redirect_origin: origin,
+      });
+      await launchGoogleOAuthPopupAndWait(started.auth_url, started.state);
+      return;
+    }
+
+    // 2. Direct localhost on PC where AGY CLI is already authenticated with Google Account
+    if (info.is_local_request && info.agy_authenticated) {
+      const res = await api.loginWithLocalAgyGoogle(device);
+      onGoogleTokenLogin(res.token, 'Antigravity Google Account');
+      return;
+    }
+
+    // 3. Remote / Tunnel without OAuth Client ID yet -> open 1-time Google OAuth setup drawer
+    if (pin.trim() && !setupPin) {
+      setSetupPin(pin.trim());
+    }
+    setAuthMode('connect');
+    setGoogleSetupOpen(true);
+    throw new Error('setup_required');
+  };
+
+  const handleSetupClientJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const txt = await f.text();
+      setOauthClientJson(txt);
+      const parsed = JSON.parse(txt);
+      const block = parsed.web || parsed.installed || parsed;
+      if (block?.client_id) setOauthClientId(String(block.client_id));
+      if (block?.client_secret) setOauthClientSecret(String(block.client_secret));
+    } catch {
+      setError('File JSON không đúng định dạng Google OAuth client_secret.json.');
+    }
+  };
+
+  const handleSetupAndStartGoogle = async () => {
+    setError(null);
+    const activePin = (setupPin || pin).trim();
+    if (!activePin) {
+      setError('Vui lòng nhập Mã PIN PC (6 số) để xác nhận quyền lưu cấu hình Google OAuth lần đầu.');
+      return;
+    }
+    if (!oauthClientId.trim() && !oauthClientJson.trim()) {
+      setError('Vui lòng chọn file client_secret.json hoặc nhập Google OAuth Client ID.');
+      return;
+    }
+    setGoogleBusy(true);
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const started = await api.setupAndStartPublicGoogleLogin({
+        pin: activePin,
+        client_id: oauthClientId.trim() || undefined,
+        client_secret: oauthClientSecret.trim() || undefined,
+        client_json: oauthClientJson.trim() || undefined,
+        device_name: device,
+        redirect_origin: origin,
+      });
+      setGoogleSetupOpen(false);
+      await launchGoogleOAuthPopupAndWait(started.auth_url, started.state);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể cấu hình đăng nhập Google.');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleDirectGoogleTokenLogin = async () => {
+    setError(null);
+    const activePin = (setupPin || pin).trim();
+    if (!activePin) {
+      setError('Vui lòng nhập Mã PIN PC (6 số).');
+      return;
+    }
+    if (!directGoogleToken.trim()) {
+      setError('Vui lòng dán Google OAuth Access Token (ya29...).');
+      return;
+    }
+    setGoogleBusy(true);
+    try {
+      const res = await api.loginWithDirectGoogleToken({
+        pin: activePin,
+        access_token: directGoogleToken.trim(),
+        device_name: device,
+      });
+      setGoogleSetupOpen(false);
+      onGoogleTokenLogin(res.token, 'Google Account');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Token Google hoặc mã PIN không hợp lệ.');
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
 
   const handlePastePairingLink = async () => {
     setError(null);
@@ -248,7 +477,11 @@ export function AuthScreen({
                     </span>
                     <div className="flex-grow border-t border-slate-200 dark:border-slate-700/80" />
                   </div>
-                  <GoogleSignInButton fullWidth />
+                  <GoogleSignInButton
+                    fullWidth
+                    disabled={submitting || googleBusy}
+                    onSignIn={handleContinueWithGoogle}
+                  />
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
@@ -375,17 +608,160 @@ export function AuthScreen({
 
               <GoogleSignInButton
                 fullWidth
-                disabled={submitting}
-                onSignIn={async () => {
-                  setError(null);
-                  const cleanedPin = pin.trim();
-                  const effectiveServer = showServerField ? serverInput.trim() : '';
-                  if (cleanedPin) {
-                    setDeviceName(device);
-                    await onLogin(cleanedPin, device, effectiveServer);
-                  }
-                }}
+                disabled={submitting || googleBusy}
+                onSignIn={handleContinueWithGoogle}
               />
+
+              {googleSetupOpen && (
+                <div className="space-y-3 rounded-2xl border border-blue-500/30 bg-blue-500/[0.06] p-3.5 text-left dark:border-blue-400/25 dark:bg-[#0b1220]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        Thiết lập Đăng nhập Google (chỉ cần 1 lần)
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        Lưu OAuth Client trên PC để từ lần sau bấm <strong>Continue with Google</strong> đăng nhập ngay không cần PIN.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setGoogleSetupOpen(false)}
+                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-200/70 p-1 text-[11px] font-semibold dark:bg-[#111827]">
+                    <button
+                      type="button"
+                      onClick={() => setGoogleSetupTab('oauth')}
+                      className={`rounded-lg py-1.5 transition ${
+                        googleSetupTab === 'oauth'
+                          ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      OAuth Client (Khuyên dùng)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGoogleSetupTab('token')}
+                      className={`rounded-lg py-1.5 transition ${
+                        googleSetupTab === 'token'
+                          ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      Dán Token (ya29...)
+                    </button>
+                  </div>
+
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    value={setupPin}
+                    onChange={(e) => setSetupPin(e.target.value)}
+                    placeholder="Mã PIN PC (6 số, chỉ để xác nhận lưu lần đầu)"
+                    className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                  />
+
+                  {googleSetupTab === 'oauth' ? (
+                    <div className="space-y-2">
+                      {redirectUriHint && (
+                        <div className="rounded-xl border border-slate-200 bg-white/80 p-2 text-[10px] dark:border-slate-800 dark:bg-[#111827]">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">
+                              Authorized Redirect URI:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await copyToClipboard(redirectUriHint);
+                                setCopiedRedirect(true);
+                                window.setTimeout(() => setCopiedRedirect(false), 1800);
+                              }}
+                              className="inline-flex items-center gap-1 font-semibold text-cyan-600 hover:underline dark:text-cyan-400"
+                            >
+                              <Copy className="h-3 w-3" />
+                              {copiedRedirect ? 'Đã chép!' : 'Chép URI'}
+                            </button>
+                          </div>
+                          <p className="mt-1 break-all font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                            {redirectUriHint}
+                          </p>
+                          <a
+                            href="https://console.cloud.google.com/apis/credentials"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            Mở Google Cloud Credentials
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      )}
+
+                      <input
+                        ref={clientJsonFileRef}
+                        type="file"
+                        accept=".json,application/json"
+                        className="hidden"
+                        onChange={handleSetupClientJsonFile}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => clientJsonFileRef.current?.click()}
+                        className="inline-flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-cyan-500/40 bg-cyan-500/5 px-3 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-500/15 dark:text-cyan-300"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        {oauthClientJson ? '✓ Đã nạp client_secret.json' : 'Chọn file client_secret.json'}
+                      </button>
+
+                      <input
+                        type="text"
+                        value={oauthClientId}
+                        onChange={(e) => setOauthClientId(e.target.value)}
+                        placeholder="Google Client ID (xxx.apps.googleusercontent.com)"
+                        className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                      />
+                      <input
+                        type="password"
+                        value={oauthClientSecret}
+                        onChange={(e) => setOauthClientSecret(e.target.value)}
+                        placeholder="Client Secret (tùy chọn cho Desktop)"
+                        className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        disabled={googleBusy}
+                        onClick={handleSetupAndStartGoogle}
+                        className="inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {googleBusy ? 'Đang mở Google...' : 'Lưu & Đăng nhập với Google ngay'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="password"
+                        value={directGoogleToken}
+                        onChange={(e) => setDirectGoogleToken(e.target.value)}
+                        placeholder="Dán Google Access Token (ya29...)"
+                        className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        disabled={googleBusy}
+                        onClick={handleDirectGoogleTokenLogin}
+                        className="inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {googleBusy ? 'Đang xác thực...' : 'Đăng nhập bằng Google Token'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {canInstallPwa && (
                 <button
