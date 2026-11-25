@@ -55,6 +55,8 @@ import {
   CommandSearch,
   FileTreeExplorer,
   QrShareCard,
+  TrashLidButton,
+  UndoCountdownPill,
   type CommandSearchItem,
   type FileTreeNode,
 } from './library';
@@ -78,6 +80,7 @@ export interface LayoutProps {
   selectedConversationId?: string | null;
   onSelectConversation?: (convId: string) => void;
   onMergeAllConversations?: () => void;
+  onDeleteConversation?: (convId: string) => void;
   onSelectRun?: (runId: string) => void;
   onNewConversation?: () => void;
   onOpenArtifact?: (target: ArtifactModalTarget) => void;
@@ -103,6 +106,7 @@ export function Layout({
   selectedConversationId = null,
   onSelectConversation,
   onMergeAllConversations,
+  onDeleteConversation,
   onSelectRun,
   onNewConversation,
   onOpenArtifact,
@@ -118,6 +122,12 @@ export function Layout({
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    title: string;
+    token: number;
+  } | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [fileTreeNodes, setFileTreeNodes] = useState<FileTreeNode[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loadingRootTree, setLoadingRootTree] = useState(false);
@@ -743,15 +753,17 @@ export function Layout({
                     </span>
                   </div>
                 </div>
-                <div className="space-y-0.5">
+                <ul className="space-y-0.5 m-0 p-0 list-none" aria-label="Recent Conversations">
                   {conversations.length === 0 ? (
-                    <p className="px-2.5 py-2 text-[11px] text-slate-500 italic">
+                    <li className="px-2.5 py-2 text-[11px] text-slate-500 italic">
                       Chưa có cuộc trò chuyện nào
-                    </p>
+                    </li>
                   ) : (
                     conversations.slice(0, 15).map((conv) => {
                       const isSelected =
                         conv.id === selectedConversationId && activeTab === 'prompt';
+                      const isGone = pendingDelete?.id === conv.id;
+                      const isBack = restoringId === conv.id;
                       const statusDot =
                         conv.status === 'completed'
                           ? 'bg-emerald-400'
@@ -762,41 +774,76 @@ export function Layout({
                             : 'bg-rose-400';
 
                       return (
-                        <button
+                        <li
                           key={conv.id}
-                          type="button"
-                          onClick={() => {
-                            if (onSelectConversation) onSelectConversation(conv.id);
-                            else if (onSelectRun) onSelectRun(conv.latestRun.id);
-                            onTabChange('prompt');
-                            closeSidebarOnMobile();
-                          }}
                           className={cn(
-                            'group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition',
-                            isSelected
-                              ? 'bg-white/15 text-white font-semibold shadow-sm'
-                              : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                            'u470-r',
+                            isGone && 'is-gone',
+                            isBack && 'is-back'
                           )}
                         >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusDot)} />
-                            <span className="truncate">{conv.title}</span>
+                          <div>
+                            <div
+                              className={cn(
+                                'u470-in group px-1.5 py-1 text-xs transition',
+                                isSelected
+                                  ? 'bg-white/15 text-white font-semibold shadow-sm'
+                                  : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onSelectConversation) onSelectConversation(conv.id);
+                                  else if (onSelectRun) onSelectRun(conv.latestRun.id);
+                                  onTabChange('prompt');
+                                  closeSidebarOnMobile();
+                                }}
+                                className="flex min-w-0 flex-1 items-center justify-between gap-1.5 py-0.5 pl-1 text-left"
+                              >
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusDot)}
+                                  />
+                                  <span className="truncate">{conv.title}</span>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                  {conv.runs.length > 1 && (
+                                    <span className="rounded bg-white/10 px-1 py-0.2 text-[9px] font-mono text-slate-300">
+                                      {conv.runs.length}
+                                    </span>
+                                  )}
+                                  <span className="text-[9px] text-slate-500 opacity-80 group-hover:opacity-100">
+                                    {formatRelativeTime(conv.updatedAt)}
+                                  </span>
+                                </div>
+                              </button>
+
+                              {onDeleteConversation && (
+                                <TrashLidButton
+                                  label={`Xóa hội thoại "${conv.title}"`}
+                                  className="opacity-65 group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (pendingDelete && pendingDelete.id !== conv.id) {
+                                      onDeleteConversation(pendingDelete.id);
+                                    }
+                                    setRestoringId(null);
+                                    setPendingDelete({
+                                      id: conv.id,
+                                      title: conv.title,
+                                      token: Date.now(),
+                                    });
+                                  }}
+                                />
+                              )}
+                            </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-1.5 pl-1">
-                            {conv.runs.length > 1 && (
-                              <span className="rounded bg-white/10 px-1 py-0.2 text-[9px] font-mono text-slate-300">
-                                {conv.runs.length}
-                              </span>
-                            )}
-                            <span className="text-[9px] text-slate-500 opacity-80 group-hover:opacity-100">
-                              {formatRelativeTime(conv.updatedAt)}
-                            </span>
-                          </div>
-                        </button>
+                        </li>
                       );
                     })
                   )}
-                </div>
+                </ul>
               </div>
             </div>
 
@@ -1046,6 +1093,30 @@ export function Layout({
       {/* 1:1 CUSTOM THEME STUDIO MODAL (Opened by ⭐ Custom theme)      */}
       {/* ============================================================== */}
       {isThemeModalOpen && <CustomThemeModal />}
+
+      {/* ============================================================== */}
+      {/* LUCIAN #470 FLOATING 5s COUNTDOWN RING UNDO PILL               */}
+      {/* ============================================================== */}
+      <UndoCountdownPill
+        open={Boolean(pendingDelete)}
+        itemLabel={pendingDelete?.title}
+        resetKey={pendingDelete?.token ?? 0}
+        onUndo={() => {
+          if (!pendingDelete) return;
+          const restoredId = pendingDelete.id;
+          setPendingDelete(null);
+          setRestoringId(restoredId);
+          window.setTimeout(() => {
+            setRestoringId((cur) => (cur === restoredId ? null : cur));
+          }, 800);
+        }}
+        onExpire={() => {
+          if (!pendingDelete) return;
+          const idToCommit = pendingDelete.id;
+          setPendingDelete(null);
+          onDeleteConversation?.(idToCommit);
+        }}
+      />
     </div>
   );
 }

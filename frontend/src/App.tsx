@@ -11,7 +11,9 @@ import {
   getRunConversationId,
   groupRunsIntoConversations,
   loadConversationMap,
+  loadDeletedRunIds,
   saveConversationMap,
+  saveDeletedRunIds,
 } from './lib/conversations';
 import {
   api,
@@ -101,6 +103,7 @@ export default function App() {
   const [conversationMap, setConversationMap] = useState<Record<string, string>>(() =>
     loadConversationMap()
   );
+  const [deletedRunIds, setDeletedRunIds] = useState<string[]>(() => loadDeletedRunIds());
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [sessions, setSessions] = useState<AntigravitySessionSummary[]>([]);
@@ -863,9 +866,15 @@ export default function App() {
     );
   };
 
+  const visibleRuns = useMemo(() => {
+    if (deletedRunIds.length === 0) return runs;
+    const deletedSet = new Set(deletedRunIds);
+    return runs.filter((r) => !deletedSet.has(r.id));
+  }, [runs, deletedRunIds]);
+
   const conversations = useMemo(
-    () => groupRunsIntoConversations(runs, conversationMap),
-    [runs, conversationMap]
+    () => groupRunsIntoConversations(visibleRuns, conversationMap),
+    [visibleRuns, conversationMap]
   );
 
   const activeConversation = useMemo(() => {
@@ -904,12 +913,30 @@ export default function App() {
     const emptyMap: Record<string, string> = {};
     setConversationMap(emptyMap);
     saveConversationMap(emptyMap);
-    if (runs.length > 0) {
+    if (visibleRuns.length > 0) {
       setSelectedConversationId(DEFAULT_CONVERSATION_ID);
-      setSelectedRunId(runs[0]?.id ?? null);
+      setSelectedRunId(visibleRuns[0]?.id ?? null);
     }
     notify('Đã gộp toàn bộ hội thoại thành 1 cuộc trò chuyện duy nhất', 'success');
-  }, [runs, notify]);
+  }, [visibleRuns, notify]);
+
+  const handleDeleteConversation = useCallback(
+    (convId: string) => {
+      const target = conversations.find((c) => c.id === convId);
+      if (!target) return;
+      const idsToHide = target.runs.map((r) => r.id);
+      setDeletedRunIds((prev) => {
+        const next = Array.from(new Set([...prev, ...idsToHide]));
+        saveDeletedRunIds(next);
+        return next;
+      });
+      if (selectedConversationId === convId) {
+        setSelectedConversationId(null);
+        setSelectedRunId(null);
+      }
+    },
+    [conversations, selectedConversationId]
+  );
 
   if (booting) {
     return (
@@ -957,6 +984,7 @@ export default function App() {
         selectedConversationId={selectedConversationId}
         onSelectConversation={handleSelectConversation}
         onMergeAllConversations={handleMergeAllConversations}
+        onDeleteConversation={handleDeleteConversation}
         onSelectRun={handleSelectRunInConversation}
         onNewConversation={() => {
           setSelectedRunId(null);

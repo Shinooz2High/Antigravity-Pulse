@@ -1,0 +1,236 @@
+/* Lucian UX/UI Prompt #470 · Animated Delete Row + 5s Countdown Ring Undo Pill */
+
+.u470-r {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.42s cubic-bezier(0.65, 0, 0.35, 1) 0.12s;
+}
+
+.u470-r > div {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.u470-in {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  transition:
+    transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 0.2s ease;
+}
+
+.u470-r.is-gone {
+  grid-template-rows: 0fr;
+}
+
+.u470-r.is-gone .u470-in {
+  transform: translateX(-46px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.u470-r.is-back {
+  transition: grid-template-rows 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.u470-r.is-back .u470-in {
+  transition:
+    transform 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) 0.08s,
+    opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s,
+    background-color 0.2s ease;
+}
+
+/* Animated Trash Can with Hover Lid Tilt */
+.u470-del {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.72);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1),
+    opacity 0.2s ease;
+}
+
+.u470-del:hover {
+  background: rgba(244, 63, 94, 0.16);
+  color: #fb7185;
+}
+
+.u470-del:active {
+  transform: scale(0.86);
+}
+
+.u470-del:focus-visible {
+  outline: 2px solid var(--ct-primary, #38bdf8);
+  outline-offset: 1px;
+}
+
+.u470-del svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+
+.u470-del .lid {
+  transform-origin: 17px 6.5px;
+  transition: transform 0.35s cubic-bezier(0.34, 1.8, 0.5, 1);
+}
+
+.u470-del:hover .lid {
+  transform: translateY(-1.5px) rotate(14deg);
+}
+
+/* Floating 5-Second Countdown Ring Undo Pill */
+.u470-undo {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 18px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.96));
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 18px 36px -12px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(56, 189, 248, 0.18);
+  transform: translate(-50%, 24px) scale(0.86);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s 0.45s;
+}
+
+.u470-undo.is-on {
+  transform: translate(-50%, 0) scale(var(--u470-k, 1));
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+
+.u470-undo.is-on:hover {
+  --u470-k: 1.04;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.u470-undo.is-on:active {
+  --u470-k: 0.95;
+  transition-duration: 0.12s;
+}
+
+.u470-undo:focus-visible {
+  outline: 2px solid var(--ct-primary, #38bdf8);
+  outline-offset: 3px;
+}
+
+.u470-rg {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--ct-primary, #38bdf8);
+}
+
+.u470-rg svg {
+  position: absolute;
+  inset: 0;
+  width: 26px;
+  height: 26px;
+  transform: rotate(-90deg);
+}
+
+.u470-rg circle {
+  fill: none;
+  stroke-width: 2.4;
+}
+
+.u470-rg .bg {
+  stroke: currentColor;
+  opacity: 0.22;
+}
+
+.u470-rg .fg {
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+
+.u470-rg b {
+  font-size: 10.5px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+}
+
+.u470-undo-label {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(226, 232, 240, 0.8);
+  font-weight: 500;
+}
+
+.u470-undo-cta {
+  color: var(--ct-primary, #38bdf8);
+  font-weight: 700;
+}
+
+.u470-ar {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--ct-primary, #38bdf8);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.5s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.u470-undo:hover .u470-ar {
+  transform: rotate(-40deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u470-r,
+  .u470-in,
+  .u470-del,
+  .u470-del .lid,
+  .u470-undo,
+  .u470-ar {
+    transition-duration: 0.001ms !important;
+  }
+}

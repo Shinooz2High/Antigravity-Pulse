@@ -144,7 +144,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | `ModelSelectorModal.tsx` | Hộp thoại chọn model AI để thực thi prompt. |
 | `QrScannerModal.tsx` | Modal mở camera quét mã QR ghép nối trực tiếp bằng `jsqr`. |
 | `ToolApprovalBanner.tsx` | Thanh thông báo nổi yêu cầu người dùng duyệt hoặc từ chối lời gọi tool của AI ngay trên điện thoại. |
-| `library/` | Bộ UI component tái sử dụng: `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `ThinkingAccordion`, `TypeToConfirmDeleteModal`. |
+| `library/` | Bộ UI component tái sử dụng: `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `ThinkingAccordion`, `TypeToConfirmDeleteModal`, `UndoableDeleteList`. |
 | `theme/` | Các component hiệu ứng giao diện: `BootIntroOverlay` (màn hình khởi động), `CustomThemeModal` (trình tùy chỉnh theme), `LiveWallpaperLayer` (lớp hình nền động). |
 
 ---

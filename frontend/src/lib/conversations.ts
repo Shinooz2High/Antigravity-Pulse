@@ -2,6 +2,29 @@ import type { PromptRun } from '../types/api';
 
 export const DEFAULT_CONVERSATION_ID = 'main-conversation';
 const CONV_MAP_KEY = 'agy_pulse_conv_map_v1';
+const DELETED_RUNS_KEY = 'agy_pulse_deleted_runs_v1';
+
+export function loadDeletedRunIds(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_RUNS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string');
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return [];
+}
+
+export function saveDeletedRunIds(ids: string[]): void {
+  try {
+    localStorage.setItem(DELETED_RUNS_KEY, JSON.stringify(ids));
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 export interface ConversationThread {
   id: string;

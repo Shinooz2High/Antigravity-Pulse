@@ -19,3 +19,4 @@ export * from './AppDownloadCard';
 export * from './FileUploadQueue';
 export * from './FileTreeExplorer';
 export * from './ThinkingAccordion';
+export * from './UndoableDeleteList';
