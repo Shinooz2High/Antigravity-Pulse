@@ -275,6 +275,24 @@ class SettingsService:
                 return val.strip()
             return None
 
+    def get_discord_rpc_enabled(self) -> bool:
+        with self._lock:
+            return bool(self._data.get("discord_rpc_enabled", False))
+
+    def get_discord_client_id(self) -> str | None:
+        with self._lock:
+            val = self._data.get("discord_client_id") or os.environ.get("AGY_DISCORD_CLIENT_ID")
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+            return None
+
+    def get_discord_large_image(self) -> str | None:
+        with self._lock:
+            val = self._data.get("discord_large_image") or os.environ.get("AGY_DISCORD_LARGE_IMAGE")
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+            return None
+
     @staticmethod
     def _mask_api_key(key: str | None) -> str | None:
         if not key:
@@ -307,6 +325,9 @@ class SettingsService:
                 cloudflare_tunnel_token_set=bool(cf_token),
                 cloudflare_tunnel_token_masked=self._mask_api_key(cf_token),
                 cloudflare_tunnel_url=self.get_cloudflare_tunnel_url(),
+                discord_rpc_enabled=self.get_discord_rpc_enabled(),
+                discord_client_id=self.get_discord_client_id(),
+                discord_large_image=self.get_discord_large_image(),
             )
 
     def update(self, req: UpdateSettingsRequest) -> SystemSettingsResponse:
@@ -353,6 +374,12 @@ class SettingsService:
                 self._data["cloudflare_tunnel_token_cleared"] = False
             if req.cloudflare_tunnel_url is not None:
                 self._data["cloudflare_tunnel_url"] = req.cloudflare_tunnel_url.strip() or None
+            if req.discord_rpc_enabled is not None:
+                self._data["discord_rpc_enabled"] = req.discord_rpc_enabled
+            if req.discord_client_id is not None:
+                self._data["discord_client_id"] = req.discord_client_id.strip() or None
+            if req.discord_large_image is not None:
+                self._data["discord_large_image"] = req.discord_large_image.strip() or None
 
             self._save()
             return self.to_response()

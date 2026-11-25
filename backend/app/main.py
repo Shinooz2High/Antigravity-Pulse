@@ -16,6 +16,7 @@ from .config import AppConfig
 from .routers import antigravity, auth, google_auth, projects, prompts, system, ws
 from .services.auth_service import AuthService
 from .services.brain_scanner import BrainScanner
+from .services.discord_rpc_service import DiscordRpcService
 from .services.file_watcher import FileWatcherService
 from .services.google_auth_service import GoogleAuthService
 from .services.models_service import ModelsService
@@ -67,6 +68,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
         google_auth_service=google_auth_service,
     )
     file_watcher = FileWatcherService(settings_service, project_service, ws_manager)
+    discord_rpc_service = DiscordRpcService(settings_service, project_service, brain_scanner)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -77,11 +79,13 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
             probe_task = asyncio.create_task(google_auth_service.probe_agy_session(force=False))
             quick_connect_service.start_background_sync()
             file_watcher.start()
+            discord_rpc_service.start()
         try:
             yield
         finally:
             if probe_task is not None and not probe_task.done():
                 probe_task.cancel()
+            discord_rpc_service.stop()
             quick_connect_service.stop_background_sync()
             file_watcher.stop()
             await runner_service.stop()
@@ -106,6 +110,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     app.state.quick_connect_service = quick_connect_service
     app.state.runner_service = runner_service
     app.state.file_watcher = file_watcher
+    app.state.discord_rpc_service = discord_rpc_service
 
     app.add_middleware(
         CORSMiddleware,

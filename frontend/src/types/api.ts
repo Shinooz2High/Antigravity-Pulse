@@ -261,6 +261,9 @@ export interface SystemSettings {
   cloudflare_tunnel_token_set?: boolean;
   cloudflare_tunnel_token_masked?: string | null;
   cloudflare_tunnel_url?: string | null;
+  discord_rpc_enabled?: boolean;
+  discord_client_id?: string | null;
+  discord_large_image?: string | null;
 }
 
 export interface SystemSettingsUpdate {
@@ -282,6 +285,20 @@ export interface SystemSettingsUpdate {
   cloudflare_tunnel_token?: string;
   clear_cloudflare_tunnel_token?: boolean;
   cloudflare_tunnel_url?: string;
+  discord_rpc_enabled?: boolean;
+  discord_client_id?: string;
+  discord_large_image?: string;
+}
+
+export interface DiscordRpcStatus {
+  enabled: boolean;
+  status: string;
+  connected: boolean;
+  details: string | null;
+  state: string | null;
+  started_at: number | null;
+  elapsed_seconds: number;
+  error: string | null;
 }
 
 export interface TunnelActionResponse {

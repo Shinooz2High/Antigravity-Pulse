@@ -342,6 +342,9 @@ class SystemSettingsResponse(BaseModel):
     cloudflare_tunnel_token_set: bool = False
     cloudflare_tunnel_token_masked: str | None = None
     cloudflare_tunnel_url: str | None = None
+    discord_rpc_enabled: bool = False
+    discord_client_id: str | None = None
+    discord_large_image: str | None = None
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -363,6 +366,20 @@ class UpdateSettingsRequest(BaseModel):
     cloudflare_tunnel_token: str | None = None
     clear_cloudflare_tunnel_token: bool = False
     cloudflare_tunnel_url: str | None = None
+    discord_rpc_enabled: bool | None = None
+    discord_client_id: str | None = None
+    discord_large_image: str | None = None
+
+
+class DiscordRpcStatusResponse(BaseModel):
+    enabled: bool = False
+    status: str = "disabled"
+    connected: bool = False
+    details: str | None = None
+    state: str | None = None
+    started_at: int | None = None
+    elapsed_seconds: int = 0
+    error: str | None = None
 
 
 class TunnelStartResponse(BaseModel):

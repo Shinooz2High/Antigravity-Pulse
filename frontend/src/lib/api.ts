@@ -6,6 +6,7 @@ import type {
   AuthStatus,
   AuthTokenResponse,
   DeviceInfo,
+  DiscordRpcStatus,
   EngineMode,
   ExecutionPolicy,
   FileContentResponse,
@@ -774,5 +775,9 @@ export const api = {
     return apiFetch<GoogleAuthStatus>('/api/system/google-auth/logout', {
       method: 'POST',
     });
+  },
+
+  getDiscordRpcStatus(): Promise<DiscordRpcStatus> {
+    return apiFetch<DiscordRpcStatus>('/api/system/discord-rpc');
   },
 };

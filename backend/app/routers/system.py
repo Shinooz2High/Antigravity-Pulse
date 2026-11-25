@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from ..models import (
+    DiscordRpcStatusResponse,
     MobileBuildInfo,
     ModelListResponse,
     SelectModelRequest,
@@ -123,7 +124,25 @@ async def update_settings(
     updated = settings.update(body)
     if body.brain_dir is not None:
         request.app.state.file_watcher.refresh_watches()
+    discord_rpc = getattr(request.app.state, "discord_rpc_service", None)
+    if discord_rpc is not None and (
+        body.discord_rpc_enabled is not None
+        or body.discord_client_id is not None
+        or body.discord_large_image is not None
+    ):
+        discord_rpc.refresh(reset_timer=bool(body.discord_rpc_enabled))
     return updated
+
+
+@router.get("/discord-rpc", response_model=DiscordRpcStatusResponse)
+async def get_discord_rpc_status(
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> DiscordRpcStatusResponse:
+    discord_rpc = getattr(request.app.state, "discord_rpc_service", None)
+    if discord_rpc is None:
+        return DiscordRpcStatusResponse()
+    return DiscordRpcStatusResponse(**discord_rpc.get_status())
 
 
 @router.post("/tunnel/start", response_model=TunnelStartResponse)
