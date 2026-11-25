@@ -248,15 +248,58 @@ export function SettingsPage({
     onNotify(ok ? `Đã sao chép ${label}` : 'Không thể sao chép', ok ? 'success' : 'error');
   };
 
+  const buildInviteMessage = () => {
+    if (!pairInfo) return '';
+    const link = pairInfo.quick_short_url || pairInfo.pair_url;
+    const codeLine = pairInfo.quick_code
+      ? `\nHoặc mở App Antigravity Pulse và nhập mã 6 ký tự: ${pairInfo.quick_code}`
+      : '';
+    return `⚡ Bấm vào link này để kết nối Antigravity Pulse (tự đăng nhập luôn, không cần PIN hay IP):\n${link}${codeLine}`;
+  };
+
   const handleSharePairUrl = async () => {
     if (!pairInfo?.pair_url) return;
+    const link = pairInfo.quick_short_url || pairInfo.pair_url;
     const res = await shareContent({
       title: 'Kết nối Antigravity Pulse',
-      text: `Mở liên kết để ghép nối điện thoại với PC (PIN: ${pairInfo.pin})`,
-      url: pairInfo.pair_url,
+      text: buildInviteMessage(),
+      url: link,
     });
     if (res === 'shared' || res === 'cancelled') return;
-    handleCopy('liên kết ghép nối', pairInfo.pair_url);
+    handleCopy('tin nhắn ghép nối 1 chạm', buildInviteMessage());
+  };
+
+  const handleShareZalo = async () => {
+    if (!pairInfo?.pair_url) return;
+    const msg = buildInviteMessage();
+    await copyToClipboard(msg);
+    if (isNativeApp()) {
+      const res = await shareContent({
+        title: 'Gửi qua Zalo — Antigravity Pulse',
+        text: msg,
+        url: pairInfo.quick_short_url || pairInfo.pair_url,
+      });
+      if (res === 'shared' || res === 'cancelled') return;
+    }
+    openExternalLink('https://chat.zalo.me/');
+    onNotify('Đã chép sẵn tin nhắn + link 1 chạm! Chọn người nhận (hoặc Cloud của tôi) trong Zalo rồi nhấn Dán (Ctrl+V) để gửi.', 'success');
+  };
+
+  const handleShareMessenger = async () => {
+    if (!pairInfo?.pair_url) return;
+    const link = pairInfo.quick_short_url || pairInfo.pair_url;
+    const msg = buildInviteMessage();
+    await copyToClipboard(msg);
+    if (isNativeApp()) {
+      const res = await shareContent({
+        title: 'Gửi qua Messenger — Antigravity Pulse',
+        text: msg,
+        url: link,
+      });
+      if (res === 'shared' || res === 'cancelled') return;
+    }
+    openExternalLink('https://www.messenger.com/');
+    onNotify('Đã chép sẵn tin nhắn + link 1 chạm! Chọn cuộc trò chuyện trong Messenger rồi nhấn Dán (Ctrl+V) để gửi.', 'success');
   };
 
   const handleSaveServerUrl = async () => {
@@ -545,11 +588,25 @@ export function SettingsPage({
                   </button>
                   <button
                     type="button"
+                    onClick={handleShareZalo}
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[#0068FF] px-3 text-xs font-bold text-white shadow-sm hover:brightness-110"
+                  >
+                    💬 Gửi qua Zalo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShareMessenger}
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#0084FF] to-[#A033FF] px-3 text-xs font-bold text-white shadow-sm hover:brightness-110"
+                  >
+                    💙 Gửi qua Messenger
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleSharePairUrl}
                     className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200"
                   >
                     <Share2 className="h-3.5 w-3.5" />
-                    Chia sẻ ngay
+                    Chia sẻ khác
                   </button>
                 </div>
               </div>
