@@ -16,7 +16,8 @@ Tài liệu này mô tả chi tiết vai trò của từng thư mục và tập 
 | `start.bat` | Script khởi chạy nhanh trên Windows (nhấp đúp để gọi `start.ps1`). |
 | `start.ps1` | Script PowerShell tự động tạo Python `.venv`, build frontend PWA nếu chưa có, in mã QR/PIN ghép nối, tùy chọn bật Cloudflare Quick Tunnel (`-Tunnel`) và khởi chạy FastAPI server. |
 | `build-mobile.ps1` | Script PowerShell tự động build frontend Vite, đồng bộ Capacitor sang Android/iOS và biên dịch Android APK (nếu có Java/Android SDK). |
-| `install/` | Thư mục cài đặt ứng dụng: `README.md` (hướng dẫn PC/Android/iOS), `install-pc.bat` & `install-pc.ps1` (bộ cài 1 chạm cho Windows + tạo Shortcut Desktop), `install-android.ps1` (cài APK qua USB/ADB). |
+| `wrangler.jsonc` | Cấu hình deploy giao diện tĩnh SPA (`frontend/dist`) lên Cloudflare Workers Assets. |
+| `install/` | Thư mục cài đặt ứng dụng: `README.md` (hướng dẫn PC/Android/iOS), `install-pc.bat` & `install-pc.ps1` (bộ cài offline cho Windows), `install-android.ps1` (cài APK qua USB/ADB). |
 | `.github/workflows/build-mobile.yml` | GitHub Actions tự động build Android APK (`Antigravity-Pulse-Android.apk`), phát hành lên GitHub Releases và đóng gói dự án iOS Xcode. |
 | `skills-lock.json` | File khóa phiên bản các Agent Skills đi kèm trong workspace. |
 | `.agents/skills/lucian-uxui/` | Bộ skill hỗ trợ thiết kế & chuyển đổi UI/UX (`SKILL.md`, `references/porting.md`, `scripts/lucian-uxui.mjs`). |
@@ -42,7 +43,8 @@ Máy chủ Python làm cầu nối thời gian thực giữa điện thoại và
 ### 2.2. API Routers (`backend/app/routers/`)
 | File | Mô tả chi tiết |
 | --- | --- |
-| `backend/app/routers/auth.py` | Xác thực bằng mã PIN 6 số, ghép nối qua QR token và quản lý phiên đăng nhập thiết bị. |
+| `backend/app/routers/auth.py` | Xác thực bằng mã PIN 6 số, ghép nối qua QR token, link 1 chạm (`?pair=`/`?c=`) và quản lý phiên đăng nhập thiết bị. |
+| `backend/app/routers/google_auth.py` | API đăng nhập **Continue with Google** (OAuth 2.0, ADC, Direct Token) và đồng bộ trạng thái tài khoản Google / Antigravity CLI (`agy`). |
 | `backend/app/routers/prompts.py` | Gửi prompt (kèm file/ảnh đính kèm), xem danh sách/chi tiết các phiên chạy, duyệt hoặc từ chối lời gọi tool (`approve`/`deny`), dừng phiên chạy. |
 | `backend/app/routers/antigravity.py` | Truy vấn danh sách các phiên Antigravity trên PC (`~/.gemini/antigravity/brain/*`), đọc transcript tóm tắt/đầy đủ và tải artifact. |
 | `backend/app/routers/projects.py` | Quản lý danh sách workspace/dự án, duyệt thư mục, đọc nội dung file an toàn và xem trạng thái Git (branch, dirty). |
@@ -60,6 +62,8 @@ Máy chủ Python làm cầu nối thời gian thực giữa điện thoại và
 | `backend/app/services/project_service.py` | Duyệt cây thư mục workspace có kiểm soát, đọc preview file và trích xuất thông tin Git. |
 | `backend/app/services/models_service.py` | Quản lý danh sách model AI khả dụng và cấu hình chọn model. |
 | `backend/app/services/tunnel_service.py` | Khởi chạy, theo dõi và dừng tiến trình `cloudflared` Quick Tunnel để truy cập từ xa ngoài mạng LAN. |
+| `backend/app/services/quick_connect_service.py` | Tạo mã kết nối nhanh 6 ký tự và đồng bộ thông tin tunnel mã hóa đầu cuối lên relay để đăng nhập 1 chạm qua `https://agypulse.dpdns.org/?c=...`. |
+| `backend/app/services/google_auth_service.py` | Quản lý xác thực Google OAuth 2.0, ADC và phiên đăng nhập Antigravity CLI (`agy`). |
 | `backend/app/services/ws_manager.py` | Quản lý kết nối WebSocket đa thiết bị và broadcast sự kiện. |
 
 ### 2.4. Kiểm thử (`backend/tests/`)
@@ -93,6 +97,9 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | File / Thư mục | Mô tả chi tiết |
 | --- | --- |
 | `frontend/public/manifest.webmanifest` | Web App Manifest cho phép cài đặt app lên màn hình chính điện thoại (PWA). |
+| `frontend/public/install.ps1` | Script cài đặt 1 dòng trên Windows PC phục vụ tại `https://agypulse.dpdns.org/install.ps1`. |
+| `frontend/public/cai-antigravity-pulse.bat` | File `.bat` bấm đúp cài đặt 1 chạm trên Windows phục vụ tại `https://agypulse.dpdns.org/cai-antigravity-pulse.bat`. |
+| `frontend/public/_redirects` | Quy tắc định tuyến SPA (`/* /index.html 200`) cho hosting tĩnh. |
 | `frontend/public/sw.js` | Service Worker hỗ trợ caching và trải nghiệm PWA. |
 | `frontend/public/icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `agy-logo.png` | Bộ biểu tượng và logo ứng dụng cho Android, iOS và trình duyệt. |
 | `frontend/public/theme_payload.js` | Script nạp dữ liệu/cấu hình giao diện tùy chỉnh trước khi render. |
@@ -106,7 +113,8 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | `frontend/src/index.css` | Stylesheet chính tích hợp Tailwind CSS và biến CSS giao diện. |
 | `frontend/src/vite-env.d.ts` | Khai báo kiểu TypeScript cho môi trường Vite. |
 | `frontend/src/types/api.ts` | Định nghĩa toàn bộ interface TypeScript cho dữ liệu API và WebSocket events. |
-| `frontend/src/lib/api.ts` | Client gọi REST API tới backend (tự động gắn token, xử lý lỗi, upload file). |
+| `frontend/src/lib/api.ts` | Client gọi REST API tới backend (tự động gắn token, xử lý lỗi, upload file, cấu hình `PUBLIC_WEB_PORTAL_URL`). |
+| `frontend/src/lib/quickConnect.ts` | Giải mã mã kết nối nhanh 6 ký tự phía client (SHA-256/HMAC-SHA256) và tự động tìm đường hầm PC đang online. |
 | `frontend/src/lib/native.ts` | Lớp trừu tượng tương tác tính năng thiết bị native qua Capacitor (Haptics, StatusBar, LocalNotifications, Share, Browser). |
 | `frontend/src/lib/utils.ts` | Các hàm tiện ích giao diện (format thời gian, dung lượng, xử lý chuỗi, v.v.). |
 | `frontend/src/hooks/usePulseSocket.ts` | Custom React Hook quản lý kết nối WebSocket, tự động reconnect và cập nhật trạng thái real-time. |
