@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Activity,
   Camera,
+  ChevronDown,
   ClipboardPaste,
   Copy,
   Download,
   ExternalLink,
   Globe,
+  HelpCircle,
   KeyRound,
   QrCode,
   Smartphone,
@@ -69,6 +71,7 @@ export function AuthScreen({
   const [scannerOpen, setScannerOpen] = useState(false);
   const [canInstallPwa, setCanInstallPwa] = useState(false);
   const [authMode, setAuthMode] = useState<'connect' | 'signup'>('connect');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Inline Google OAuth 1-time setup drawer when OAuth Client ID isn't configured yet on PC
   const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
@@ -405,8 +408,12 @@ export function AuthScreen({
         <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white/85 p-4 sm:p-6 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#111827]/85">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3.5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/25 text-cyan-500 ring-1 ring-cyan-500/30">
-                <Activity className="h-6 w-6" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900/80 p-1.5 ring-1 ring-white/15 shadow-lg">
+                <img
+                  src="/agy-logo.png"
+                  alt="Antigravity"
+                  className="h-full w-full rounded-xl object-contain"
+                />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -787,6 +794,86 @@ export function AuthScreen({
               )}
             </form>
               )}
+
+              {/* Collapsible Account Login & Pairing Guide */}
+              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/75 dark:border-slate-700/70 dark:bg-[#0b101d]/80">
+                <button
+                  type="button"
+                  onClick={() => setGuideOpen((v) => !v)}
+                  aria-expanded={guideOpen}
+                  className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:bg-slate-100/80 dark:text-slate-200 dark:hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2">
+                    <HelpCircle className="h-4 w-4 shrink-0 text-cyan-500" />
+                    <span>Hướng dẫn đăng nhập tài khoản &amp; ghép nối PC</span>
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+                      guideOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {guideOpen && (
+                  <div className="space-y-2.5 border-t border-slate-200/80 px-3.5 py-3 text-[11.5px] leading-relaxed text-slate-600 dark:border-slate-800 dark:text-slate-300">
+                    <div className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                        1
+                      </span>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">
+                          Đăng nhập bằng mã PIN 6 số (Nhanh nhất)
+                        </p>
+                        <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                          Lấy mã PIN 6 số trên máy tính (mục <strong>Cài đặt → Ghép nối</strong>), nhập vào ô <strong>Mã PIN ghép nối</strong> rồi nhấn <strong>Kết nối tới PC</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                        2
+                      </span>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">
+                          Quét mã QR hoặc Dán Link (Trên điện thoại)
+                        </p>
+                        <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                          Trên PC mở <strong>Auxiliary Panel</strong> (góc trên phải) → tab <strong>Status</strong> để hiện mã QR. Trên điện thoại bấm <strong>Quét mã QR</strong> hoặc <strong>Dán Link Ghép Nối</strong> để tự động kết nối.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-[10px] font-bold text-emerald-600 dark:text-emerald-300">
+                        3
+                      </span>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">
+                          Đăng nhập bằng tài khoản Google
+                        </p>
+                        <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                          Bấm <strong>Continue with Google</strong> để đăng nhập OAuth. Nếu lần đầu chưa cấu hình, bạn có thể nhập <strong>Client ID</strong> (Google Cloud Console) hoặc dán <strong>Google Access Token</strong> (<code>ya29...</code>).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[10px] font-bold text-amber-600 dark:text-amber-300">
+                        4
+                      </span>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">
+                          Tạo hồ sơ thiết bị mới
+                        </p>
+                        <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                          Chuyển sang tab <strong>Đăng ký</strong> ở trên cùng để điền tên &amp; email, hệ thống sẽ tự lưu hồ sơ thiết bị cho các lần kết nối sau.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

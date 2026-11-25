@@ -18,3 +18,4 @@ export * from './StreamingChatWidgets';
 export * from './AppDownloadCard';
 export * from './FileUploadQueue';
 export * from './FileTreeExplorer';
+export * from './ThinkingAccordion';

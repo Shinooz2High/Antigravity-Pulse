@@ -94,7 +94,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | --- | --- |
 | `frontend/public/manifest.webmanifest` | Web App Manifest cho phép cài đặt app lên màn hình chính điện thoại (PWA). |
 | `frontend/public/sw.js` | Service Worker hỗ trợ caching và trải nghiệm PWA. |
-| `frontend/public/icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | Bộ biểu tượng ứng dụng cho Android, iOS và trình duyệt. |
+| `frontend/public/icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `agy-logo.png` | Bộ biểu tượng và logo ứng dụng cho Android, iOS và trình duyệt. |
 | `frontend/public/theme_payload.js` | Script nạp dữ liệu/cấu hình giao diện tùy chỉnh trước khi render. |
 | `frontend/public/theme-assets/` | Tài nguyên đa phương tiện cho hệ thống Custom Theme: hình nền động (`.mp4`, `.webp`), font chữ (`fonts/`), âm thanh/giọng nói (`voice/`), họa tiết SVG (`wlop_*.svg`) và media người dùng (`user_media/`). |
 
@@ -124,14 +124,15 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 ### 3.5. Components (`frontend/src/components/`)
 | File | Mô tả chi tiết |
 | --- | --- |
-| `AuthScreen.tsx` | Màn hình đăng nhập bằng mã PIN 6 số hoặc quét mã QR ghép nối. |
+| `AuthScreen.tsx` | Màn hình đăng nhập bằng mã PIN 6 số, quét mã QR ghép nối hoặc tài khoản Google / Antigravity. |
+| `GoogleAgyAuthSection.tsx` | Phần đăng nhập Google OAuth 2.0 và đồng bộ phiên Antigravity (AGY) cục bộ. |
 | `Layout.tsx` | Khung bố cục ứng dụng di động (header, vùng nội dung, thanh điều hướng dưới). |
 | `MarkdownRenderer.tsx` | Trình hiển thị Markdown nâng cao hỗ trợ GFM, công thức toán KaTeX, biểu đồ Mermaid và tô sáng cú pháp code (`highlight.js`). |
 | `ArtifactModal.tsx` | Hộp thoại xem chi tiết, phóng to ảnh và tải xuống artifact. |
 | `ModelSelectorModal.tsx` | Hộp thoại chọn model AI để thực thi prompt. |
 | `QrScannerModal.tsx` | Modal mở camera quét mã QR ghép nối trực tiếp bằng `jsqr`. |
 | `ToolApprovalBanner.tsx` | Thanh thông báo nổi yêu cầu người dùng duyệt hoặc từ chối lời gọi tool của AI ngay trên điện thoại. |
-| `library/` | Bộ UI component tái sử dụng: `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `TypeToConfirmDeleteModal`. |
+| `library/` | Bộ UI component tái sử dụng: `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `ThinkingAccordion`, `TypeToConfirmDeleteModal`. |
 | `theme/` | Các component hiệu ứng giao diện: `BootIntroOverlay` (màn hình khởi động), `CustomThemeModal` (trình tùy chỉnh theme), `LiveWallpaperLayer` (lớp hình nền động). |
 
 ---

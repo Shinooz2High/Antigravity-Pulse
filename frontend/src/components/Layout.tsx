@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Activity,
   Bot,
@@ -47,7 +47,14 @@ import type {
 } from '../types/api';
 import { useCustomTheme } from '../contexts/CustomThemeContext';
 import { CustomThemeModal } from './theme/CustomThemeModal';
-import { CommandSearch, QrShareCard, type CommandSearchItem } from './library';
+import { api } from '../lib/api';
+import {
+  CommandSearch,
+  FileTreeExplorer,
+  QrShareCard,
+  type CommandSearchItem,
+  type FileTreeNode,
+} from './library';
 
 export interface LayoutProps {
   activeTab: TabKey;
@@ -99,6 +106,9 @@ export function Layout({
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [fileTreeNodes, setFileTreeNodes] = useState<FileTreeNode[]>([]);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [loadingRootTree, setLoadingRootTree] = useState(false);
 
   const closeSidebarOnMobile = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -108,6 +118,62 @@ export function Layout({
 
   const selectedProject =
     projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+
+  // Load root directory entries for Lucian #102 FileTreeExplorer when Aux Files tab opens
+  useEffect(() => {
+    if (!auxPaneOpen || auxTab !== 'projects' || !selectedProject?.id) return;
+    let cancelled = false;
+    setLoadingRootTree(true);
+    api
+      .getProjectFiles(selectedProject.id, '')
+      .then((res) => {
+        if (cancelled) return;
+        const nodes: FileTreeNode[] = (res.entries || []).map((entry) => ({
+          path: entry.rel_path,
+          name: entry.name,
+          isDir: entry.is_dir,
+          loaded: false,
+          children: [],
+        }));
+        setFileTreeNodes(nodes);
+      })
+      .catch(() => {
+        if (!cancelled) setFileTreeNodes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRootTree(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auxPaneOpen, auxTab, selectedProject?.id]);
+
+  const handleLoadFolder = async (folderNode: FileTreeNode) => {
+    if (!selectedProject?.id) return;
+    try {
+      const res = await api.getProjectFiles(selectedProject.id, folderNode.path);
+      const children: FileTreeNode[] = (res.entries || []).map((entry) => ({
+        path: entry.rel_path,
+        name: entry.name,
+        isDir: entry.is_dir,
+        loaded: false,
+        children: [],
+      }));
+      const attach = (list: FileTreeNode[]): FileTreeNode[] =>
+        list.map((n) => {
+          if (n.path === folderNode.path) {
+            return { ...n, loaded: true, children };
+          }
+          if (n.children && n.children.length > 0) {
+            return { ...n, children: attach(n.children) };
+          }
+          return n;
+        });
+      setFileTreeNodes((prev) => attach(prev));
+    } catch {
+      // ignore folder read error
+    }
+  };
 
   const wsBadge =
     wsStatus === 'connected'
@@ -233,16 +299,19 @@ export function Layout({
             )}
           </button>
 
-          {/* Antigravity Hexagon App Icon */}
-          <div
+          {/* Official Antigravity App Logo */}
+          <button
+            type="button"
             onClick={handleStartNewConversation}
-            className="group flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/25 transition hover:scale-105"
-            title="Antigravity 2.0"
+            className="group flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md transition hover:scale-105"
+            title="Antigravity"
           >
-            <div className="flex h-full w-full items-center justify-center rounded-[6px] bg-[#0c1020]">
-              <Sparkles className="h-3.5 w-3.5 text-cyan-400 transition group-hover:rotate-12" />
-            </div>
-          </div>
+            <img
+              src="/agy-logo.png"
+              alt="Antigravity"
+              className="h-6 w-6 rounded-md object-contain drop-shadow-[0_0_8px_rgba(56,189,248,0.35)]"
+            />
+          </button>
 
           {/* Antigravity Desktop Menu Bar */}
           <div className="hidden lg:flex items-center gap-0.5 font-medium text-slate-300">
@@ -458,8 +527,12 @@ export function Layout({
             {/* Mobile Drawer Top Header */}
             <div className="pt-safe flex items-center justify-between border-b border-white/10 px-3 py-2.5 md:hidden">
               <span className="flex items-center gap-2 text-xs font-bold text-white">
-                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                Antigravity 2.0
+                <img
+                  src="/agy-logo.png"
+                  alt="Antigravity"
+                  className="h-5 w-5 rounded object-contain"
+                />
+                Antigravity
               </span>
               <button
                 type="button"
@@ -778,12 +851,44 @@ export function Layout({
 
               {auxTab === 'projects' && (
                 <div className="space-y-2">
-                  <p className="text-[11px] text-slate-400">
-                    Cây thư mục và mã nguồn dự án: <b>{selectedProject?.name}</b>
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-[11px] text-slate-400">
+                      Workspace: <b className="text-slate-200">{selectedProject?.name || 'App'}</b>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onTabChange('projects')}
+                      className="shrink-0 text-[10px] font-semibold text-cyan-400 hover:underline"
+                    >
+                      Mở full →
+                    </button>
+                  </div>
                   <p className="font-mono text-[10px] text-slate-500 break-all">
                     {selectedProject?.root_path}
                   </p>
+                  {loadingRootTree ? (
+                    <p className="py-4 text-center text-[11px] text-slate-400">
+                      Đang tải cây thư mục...
+                    </p>
+                  ) : (
+                    <FileTreeExplorer
+                      nodes={fileTreeNodes}
+                      selectedPath={selectedFilePath}
+                      onLoadFolder={handleLoadFolder}
+                      onSelectFile={(node) => {
+                        setSelectedFilePath(node.path);
+                        if (selectedProject && onOpenArtifact) {
+                          onOpenArtifact({
+                            kind: 'project_file',
+                            projectId: selectedProject.id,
+                            projectName: selectedProject.name,
+                            relPath: node.path,
+                            name: node.name,
+                          });
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               )}
 

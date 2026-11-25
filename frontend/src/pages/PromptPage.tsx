@@ -56,6 +56,7 @@ import {
   StreamingCaret,
   StreamingControlButton,
   StreamingThinkingDots,
+  ThinkingAccordion,
   type AgentTaskStepItem,
   type UploadQueueItem,
 } from '../components/library';
@@ -506,25 +507,16 @@ export function PromptPage({
                 </div>
               )}
 
-              {/* Collapsible Thoughts Stream */}
+              {/* Lucian #453 Collapsible Thoughts Accordion */}
               {(activeRun.thoughts || isRunning) && (
-                <div className="mt-4 overflow-hidden rounded-xl border border-indigo-500/25 bg-indigo-500/5">
-                  <button
-                    type="button"
-                    onClick={() => setThoughtsOpen((v) => !v)}
-                    className="flex w-full items-center justify-between px-3.5 py-2 text-left text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/10"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Brain className={cn('h-3.5 w-3.5 text-indigo-400', isRunning && 'animate-pulse')} />
-                      <span>Quá trình suy nghĩ (Thinking Process)</span>
-                    </span>
-                    {thoughtsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
-                  {thoughtsOpen && (
-                    <div className="border-t border-indigo-500/20 px-3.5 py-3 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap font-mono">
-                      {activeRun.thoughts || 'Đang phân tích tác vụ và chuẩn bị kế hoạch thực thi...'}
-                    </div>
-                  )}
+                <div className="mt-4">
+                  <ThinkingAccordion
+                    thoughts={activeRun.thoughts || ''}
+                    isThinking={Boolean(isRunning && !activeRun.response_text)}
+                    startedAt={activeRun.created_at}
+                    finishedAt={activeRun.finished_at || activeRun.created_at}
+                    defaultOpen={thoughtsOpen}
+                  />
                 </div>
               )}
 
@@ -642,10 +634,17 @@ export function PromptPage({
       </div>
 
       {/* ============================================================== */}
-      {/* 1:1 AUTHENTIC ANTIGRAVITY .surface-composer (Mobile Safe-Area) */}
+      {/* 1:1 AUTHENTIC ANTIGRAVITY .surface-composer (Lucian #452 Glow) */}
       {/* ============================================================== */}
       <div className="relative z-20 shrink-0 px-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-8 sm:pb-4">
-        <div className="mx-auto max-w-4xl">
+        <div
+          className={cn(
+            'u452-composer-shell mx-auto max-w-4xl',
+            (isRunning || submitting) && 'is-gen'
+          )}
+        >
+          {/* Lucian #452 Conic-Gradient Orbiting Glow while Generating */}
+          <i className="u452-glow" aria-hidden="true" />
           {/* Double Border Frame Outer (Styled by Theme Customizer) */}
           <div className="agy-composer-frame-outer shadow-2xl">
             {/* Inner Composer Card */}
@@ -831,24 +830,29 @@ export function PromptPage({
                     <Volume2 className="h-4 w-4" />
                   </button>
 
-                  {/* Send Button */}
+                  {/* Lucian #452 Morphing Send (↑) ↔ Stop (■) Button */}
                   <button
                     type="button"
-                    disabled={submitting || (!promptText.trim() && attachments.length === 0)}
-                    onClick={() => handleSendPrompt()}
-                    className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-full text-white shadow-md transition',
-                      promptText.trim() || attachments.length > 0
-                        ? 'bg-gradient-to-tr from-cyan-500 to-indigo-500 hover:scale-105 hover:shadow-cyan-500/40 cursor-pointer'
-                        : 'bg-white/10 text-slate-500 cursor-not-allowed'
-                    )}
-                    title="Gửi câu lệnh (Enter)"
+                    aria-disabled={
+                      !(isRunning || submitting) && !promptText.trim() && attachments.length === 0
+                        ? 'true'
+                        : 'false'
+                    }
+                    aria-label={isRunning ? 'Dừng tác vụ đang chạy' : 'Gửi câu lệnh'}
+                    onClick={() => {
+                      if (isRunning) {
+                        handleCancel();
+                      } else if (!submitting && (promptText.trim() || attachments.length > 0)) {
+                        handleSendPrompt();
+                      }
+                    }}
+                    className="u452-send"
+                    title={isRunning ? 'Dừng tác vụ đang chạy' : 'Gửi câu lệnh (Enter)'}
                   >
-                    {submitting ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    ) : (
-                      <ArrowUp className="h-4 w-4" />
-                    )}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 19V5.5M6 11l6-6 6 6" />
+                    </svg>
+                    <i className="u452-sq" aria-hidden="true" />
                   </button>
                 </div>
               </div>

@@ -1,8 +1,9 @@
-const CACHE_NAME = 'agy-pulse-static-v1';
+const CACHE_NAME = 'agy-pulse-static-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
+  '/agy-logo.png',
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',

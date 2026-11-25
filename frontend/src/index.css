@@ -191,3 +191,130 @@ html.agy-custom-theme-active .surface-composer-card {
   backdrop-filter: blur(var(--ct-glass-blur, 9px)) !important;
   -webkit-backdrop-filter: blur(var(--ct-glass-blur, 9px)) !important;
 }
+
+/* Lucian UX/UI Prompt #452 · Spinning Conic-Gradient Composer Glow & Morphing Send/Stop */
+@property --u452-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.u452-composer-shell {
+  position: relative;
+}
+
+.u452-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 23px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--u452-a),
+    transparent 0 54%,
+    #38bdf8 74%,
+    #b7a4ff 88%,
+    transparent 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity .45s cubic-bezier(.2, .8, .2, 1);
+  animation: u452-spin 2.4s linear infinite paused;
+}
+
+.u452-composer-shell.is-gen .u452-glow {
+  opacity: 1;
+  animation-play-state: running;
+}
+
+@keyframes u452-spin {
+  to {
+    --u452-a: 360deg;
+  }
+}
+
+.u452-send {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(56, 189, 248, .35);
+  cursor: pointer;
+  transition: transform .45s cubic-bezier(.34, 1.45, .64, 1), background .25s, box-shadow .25s, opacity .2s;
+}
+
+.u452-send[aria-disabled="true"] {
+  background: rgba(255, 255, 255, .1);
+  color: rgba(148, 163, 184, .65);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.u452-send:not([aria-disabled="true"]):hover {
+  transform: scale(1.06);
+}
+
+.u452-send:not([aria-disabled="true"]):active {
+  transform: scale(.88);
+  transition-duration: .1s;
+}
+
+.u452-composer-shell.is-gen .u452-send {
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  box-shadow: 0 4px 14px rgba(244, 63, 94, .4);
+}
+
+.u452-send svg,
+.u452-sq {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transition: transform .5s cubic-bezier(.34, 1.6, .5, 1), opacity .22s cubic-bezier(.2, .8, .2, 1);
+}
+
+.u452-send svg {
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8.5px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.u452-sq {
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0;
+  transform: scale(.2) rotate(-90deg);
+}
+
+.u452-composer-shell.is-gen .u452-send svg {
+  opacity: 0;
+  transform: translateY(-7px) scale(.3);
+}
+
+.u452-composer-shell.is-gen .u452-sq {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .u452-glow {
+    animation: none !important;
+  }
+}

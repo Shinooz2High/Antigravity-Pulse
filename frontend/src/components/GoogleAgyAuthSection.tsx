@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check,
+  ChevronDown,
   Cloud,
+  Copy,
   ExternalLink,
+  HelpCircle,
   KeyRound,
   LogOut,
   Monitor,
@@ -15,7 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { isNativeApp, openExternalLink } from '../lib/native';
-import { cn } from '../lib/utils';
+import { cn, copyToClipboard } from '../lib/utils';
 import type { AuthSource, GoogleAuthStatus } from '../types/api';
 
 interface GoogleAgyAuthSectionProps {
@@ -80,6 +83,7 @@ export function GoogleAgyAuthSection({
   const [loginMethod, setLoginMethod] = useState<'oauth' | 'adc' | 'token'>('oauth');
   const [showClientForm, setShowClientForm] = useState(false);
   const [showSwitchAccount, setShowSwitchAccount] = useState(false);
+  const [showGuide, setShowGuide] = useState(true);
 
   // OAuth Client inputs
   const [clientId, setClientId] = useState('');
@@ -821,6 +825,187 @@ export function GoogleAgyAuthSection({
                     </button>
                   </div>
                 )}
+
+                {/* Step-by-step Guide tailored to active loginMethod tab */}
+                <div className="overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/5 dark:border-cyan-500/20 dark:bg-[#0b1324]/80">
+                  <button
+                    type="button"
+                    onClick={() => setShowGuide((v) => !v)}
+                    aria-expanded={showGuide}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-cyan-700 transition hover:bg-cyan-500/10 dark:text-cyan-300"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {loginMethod === 'oauth'
+                          ? 'Hướng dẫn lấy OAuth Client ID / client_secret.json'
+                          : loginMethod === 'token'
+                            ? 'Hướng dẫn lấy nhanh Access Token (ya29...)'
+                            : 'Hướng dẫn đăng nhập qua Google Cloud ADC'}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
+                        showGuide && 'rotate-180'
+                      )}
+                    />
+                  </button>
+
+                  {showGuide && (
+                    <div className="space-y-2 border-t border-cyan-500/15 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                      {loginMethod === 'oauth' && (
+                        <>
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              1
+                            </span>
+                            <div>
+                              Mở{' '}
+                              <a
+                                href="https://console.cloud.google.com/apis/credentials"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-semibold text-cyan-600 underline underline-offset-2 hover:text-cyan-500 dark:text-cyan-400"
+                              >
+                                Google Cloud Console → Credentials
+                              </a>{' '}
+                              và chọn (hoặc tạo mới) một Project.
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              2
+                            </span>
+                            <div>
+                              Vào mục <strong>OAuth consent screen</strong> → chọn <strong>External</strong> → kéo xuống mục <strong>Test users</strong> và thêm địa chỉ Gmail của bạn.
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              3
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              Quay lại <strong>Credentials</strong> → bấm <strong>+ Create Credentials → OAuth client ID</strong> → chọn <strong>Desktop app</strong> (khuyên dùng). Nếu chọn <strong>Web application</strong>, thêm Redirect URI:
+                              <div className="mt-1 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-2 py-1 font-mono text-[10px] dark:border-slate-700 dark:bg-[#090d16]">
+                                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-cyan-200">
+                                  http://localhost:8765/api/system/google-auth/callback
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await copyToClipboard('http://localhost:8765/api/system/google-auth/callback');
+                                    onNotify('Đã sao chép Redirect URI', 'success');
+                                  }}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-500/25 dark:text-cyan-300"
+                                >
+                                  <Copy className="h-2.5 w-2.5" />
+                                  Chép
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              4
+                            </span>
+                            <div>
+                              Bấm <strong>Download JSON</strong> (<code>client_secret.json</code>) rồi nhấn <strong>Chọn file JSON</strong> ở trên (hoặc dán tay <strong>Client ID</strong>) → bấm <strong>Lưu OAuth Client</strong> → <strong>Đăng nhập với Google</strong>.
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {loginMethod === 'token' && (
+                        <>
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              1
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <strong>Cách A (nhanh nhất qua Terminal PC):</strong> chạy lệnh sau rồi copy mã bắt đầu bằng <code>ya29...</code>:
+                              <div className="mt-1 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-2 py-1 font-mono text-[10px] dark:border-slate-700 dark:bg-[#090d16]">
+                                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-cyan-200">
+                                  gcloud auth print-access-token
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await copyToClipboard('gcloud auth print-access-token');
+                                    onNotify('Đã sao chép lệnh gcloud', 'success');
+                                  }}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-500/25 dark:text-cyan-300"
+                                >
+                                  <Copy className="h-2.5 w-2.5" />
+                                  Chép
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              2
+                            </span>
+                            <div>
+                              <strong>Cách B (không cần cài CLI):</strong> mở{' '}
+                              <a
+                                href="https://developers.google.com/oauthplayground/"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-semibold text-cyan-600 underline underline-offset-2 hover:text-cyan-500 dark:text-cyan-400"
+                              >
+                                Google OAuth 2.0 Playground
+                              </a>
+                              , chọn scope <code>generative-language</code> → <strong>Authorize APIs</strong> → <strong>Exchange authorization code for tokens</strong> rồi dán <code>Access token</code> vào ô trên.
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {loginMethod === 'adc' && (
+                        <>
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              1
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              Mở PowerShell / Terminal trên máy tính PC (đã cài <code>gcloud</code>) và chạy lệnh:
+                              <div className="mt-1 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-2 py-1 font-mono text-[10px] dark:border-slate-700 dark:bg-[#090d16]">
+                                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-cyan-200">
+                                  gcloud auth application-default login
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await copyToClipboard('gcloud auth application-default login');
+                                    onNotify('Đã sao chép lệnh gcloud ADC', 'success');
+                                  }}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-500/25 dark:text-cyan-300"
+                                >
+                                  <Copy className="h-2.5 w-2.5" />
+                                  Chép
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-bold text-cyan-600 dark:text-cyan-300">
+                              2
+                            </span>
+                            <div>
+                              Hoàn tất đăng nhập trên trình duyệt vừa bật, sau đó quay lại đây nhấn <strong>Làm mới</strong> ở góc trên và bấm <strong>Đồng bộ Token từ Google Cloud ADC</strong>.
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {showSwitchAccount && status?.google_connected && (
                   <button
