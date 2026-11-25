@@ -9,12 +9,16 @@ import shutil
 import socket
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from ..models import (
+    MobileBuildInfo,
     ModelListResponse,
     SelectModelRequest,
     SystemSettingsResponse,
@@ -155,3 +159,111 @@ async def select_model(
     ws_manager = request.app.state.ws_manager
     await ws_manager.broadcast("system.model_changed", {"model": clean_model})
     return updated
+
+
+@router.get("/mobile-builds", response_model=MobileBuildInfo)
+async def get_mobile_builds(
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> MobileBuildInfo:
+    """Returns availability and download metadata for Android APK and iOS builds."""
+    settings = request.app.state.settings_service
+    tunnel = request.app.state.tunnel_service
+    port = request.app.state.config.agy_port
+
+    lan_ip = get_lan_ip()
+    lan_url = f"http://{lan_ip}:{port}"
+    tailscale_ip = get_tailscale_ip()
+    tailscale_url = f"http://{tailscale_ip}:{port}" if tailscale_ip else None
+    preferred_url = tunnel.tunnel_url or tailscale_url or lan_url
+    pair_token = settings.get_pair_token()
+    pin = settings.get_pin()
+
+    deep_link = (
+        f"agypulse://pair?url={quote(preferred_url, safe='')}&pair={quote(pair_token, safe='')}&pin={quote(pin, safe='')}"
+    )
+
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    builds_dir = base_dir / "data" / "builds"
+    builds_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check Android APK
+    apk_candidate_1 = builds_dir / "Antigravity-Pulse.apk"
+    apk_candidate_2 = (
+        base_dir.parent / "frontend" / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+    )
+    apk_file = apk_candidate_1 if apk_candidate_1.exists() else (apk_candidate_2 if apk_candidate_2.exists() else None)
+
+    android_apk_available = apk_file is not None and apk_file.exists()
+    android_apk_size = apk_file.stat().st_size if android_apk_available and apk_file else None
+    android_apk_updated = (
+        datetime.fromtimestamp(apk_file.stat().st_mtime, tz=timezone.utc).isoformat()
+        if android_apk_available and apk_file
+        else None
+    )
+
+    # Check iOS IPA
+    ipa_file = builds_dir / "Antigravity-Pulse.ipa"
+    ios_ipa_available = ipa_file.exists()
+    ios_ipa_size = ipa_file.stat().st_size if ios_ipa_available else None
+    ios_ipa_updated = (
+        datetime.fromtimestamp(ipa_file.stat().st_mtime, tz=timezone.utc).isoformat()
+        if ios_ipa_available
+        else None
+    )
+
+    frontend_dir = base_dir.parent / "frontend"
+    android_ready = (frontend_dir / "android" / "app" / "src" / "main" / "AndroidManifest.xml").exists()
+    ios_ready = (frontend_dir / "ios" / "App" / "App" / "Info.plist").exists()
+
+    return MobileBuildInfo(
+        android_apk_available=android_apk_available,
+        android_apk_size=android_apk_size,
+        android_apk_updated_at=android_apk_updated,
+        android_apk_url="/api/system/mobile-download/android" if android_apk_available else None,
+        ios_ipa_available=ios_ipa_available,
+        ios_ipa_size=ios_ipa_size,
+        ios_ipa_updated_at=ios_ipa_updated,
+        ios_ipa_url="/api/system/mobile-download/ios" if ios_ipa_available else None,
+        android_project_ready=android_ready,
+        ios_project_ready=ios_ready,
+        deep_link_pair_url=deep_link,
+    )
+
+
+@router.get("/mobile-download/{platform}")
+async def download_mobile_package(
+    platform: str,
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> FileResponse:
+    """Download compiled Android APK or iOS package."""
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    builds_dir = base_dir / "data" / "builds"
+
+    if platform.lower() == "android":
+        apk_1 = builds_dir / "Antigravity-Pulse.apk"
+        apk_2 = (
+            base_dir.parent / "frontend" / "android" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+        )
+        target = apk_1 if apk_1.exists() else (apk_2 if apk_2.exists() else None)
+        if not target or not target.exists():
+            raise HTTPException(status_code=404, detail="File APK chưa được biên dịch.")
+        return FileResponse(
+            path=str(target),
+            filename="Antigravity-Pulse.apk",
+            media_type="application/vnd.android.package-archive",
+        )
+
+    if platform.lower() == "ios":
+        ipa = builds_dir / "Antigravity-Pulse.ipa"
+        if not ipa.exists():
+            raise HTTPException(status_code=404, detail="File IPA iOS chưa sẵn sàng.")
+        return FileResponse(
+            path=str(ipa),
+            filename="Antigravity-Pulse.ipa",
+            media_type="application/octet-stream",
+        )
+
+    raise HTTPException(status_code=400, detail=f"Nền tảng {platform} không hợp lệ.")
+

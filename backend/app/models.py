@@ -379,3 +379,21 @@ class ModelListResponse(BaseModel):
 
 class SelectModelRequest(BaseModel):
     model: str
+
+
+# --- Mobile Builds & Packages ---
+
+
+class MobileBuildInfo(BaseModel):
+    android_apk_available: bool = False
+    android_apk_size: int | None = None
+    android_apk_updated_at: str | None = None
+    android_apk_url: str | None = None
+    ios_ipa_available: bool = False
+    ios_ipa_size: int | None = None
+    ios_ipa_updated_at: str | None = None
+    ios_ipa_url: str | None = None
+    android_project_ready: bool = False
+    ios_project_ready: bool = False
+    deep_link_pair_url: str | None = None
+

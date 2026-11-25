@@ -267,6 +267,7 @@ export const COMPOSER_STYLES: ComposerStyleDef[] = [
 ];
 
 export const TAWA_GREETINGS = [
+  'Tawa đã sẵn sàng rồi, hôm nay sensei muốn code gì nào',
   'Chào mừng Sensei quay trở lại! Hôm nay chúng ta sẽ xây dựng điều gì nào? ✨',
   'Mọi hệ thống trên PC đã sẵn sàng, Sensei chỉ cần ra lệnh thôi nhé~ 🌸',
   'Chúc Sensei một ngày code thật mượt mà và không gặp bug nào nha! 💙',
@@ -278,7 +279,7 @@ const STORAGE_KEY = 'agy_pulse_custom_theme_v1';
 const DEFAULT_CONFIG: CustomThemeConfig = {
   enabled: true,
   themeName: 'Furina Live',
-  inputStyle: 'sync',
+  inputStyle: 'sakura_frost',
   dimming: 27,
   glassBlur: 9,
   wpEnabled: true,
@@ -328,7 +329,7 @@ export function CustomThemeProvider({ children }: { children: React.ReactNode })
   const [revealTick, setRevealTick] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [greetingText] = useState(
-    () => TAWA_GREETINGS[Math.floor(Math.random() * TAWA_GREETINGS.length)]
+    () => TAWA_GREETINGS[0]
   );
 
   const preset = THEME_PRESETS[config.themeName] || THEME_PRESETS['Furina Live'];
