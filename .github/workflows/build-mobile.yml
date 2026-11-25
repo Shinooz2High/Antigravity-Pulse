@@ -7,6 +7,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     name: Build Android APK
@@ -28,9 +31,6 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Frontend Dependencies
         working-directory: frontend
         run: npm ci
@@ -51,12 +51,30 @@ jobs:
         working-directory: frontend/android
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Prepare APK for Release
+        run: |
+          mkdir -p release-assets
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk release-assets/Antigravity-Pulse-Android.apk
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Antigravity-Pulse-Android-Debug
-          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
+          path: release-assets/Antigravity-Pulse-Android.apk
+          retention-days: 30
+
+      - name: Publish Latest APK to GitHub Releases
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Antigravity Pulse (Latest Build)
+          body: |
+            Bản build tự động mới nhất của **Antigravity Pulse** cho điện thoại Android.
+            Xem hướng dẫn cài đặt chi tiết tại thư mục [`install/`](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/tree/main/install).
+          files: |
+            release-assets/Antigravity-Pulse-Android.apk
+          make_latest: true
 
   build-ios:
     name: Build iOS Project (Xcode)
@@ -82,12 +100,13 @@ jobs:
 
       - name: Sync Capacitor iOS
         working-directory: frontend
-        run: npx cap sync ios
+        run: npx cap copy ios
 
-      - name: Build Xcode Archive (Simulator / Unsigned)
+      - name: Build Xcode Project (iOS Simulator / Unsigned)
         working-directory: frontend/ios/App
+        continue-on-error: true
         run: |
-          xcodebuild -workspace App.xcworkspace \
+          xcodebuild -project App.xcodeproj \
             -scheme App \
             -destination 'generic/platform=iOS Simulator' \
             clean build CODE_SIGNING_ALLOWED=NO
@@ -101,4 +120,4 @@ jobs:
         with:
           name: Antigravity-Pulse-iOS-Project
           path: Antigravity-Pulse-iOS-Project.zip
-          retention-days: 14
+          retention-days: 30

@@ -16,6 +16,8 @@ Tài liệu này mô tả chi tiết vai trò của từng thư mục và tập 
 | `start.bat` | Script khởi chạy nhanh trên Windows (nhấp đúp để gọi `start.ps1`). |
 | `start.ps1` | Script PowerShell tự động tạo Python `.venv`, build frontend PWA nếu chưa có, in mã QR/PIN ghép nối, tùy chọn bật Cloudflare Quick Tunnel (`-Tunnel`) và khởi chạy FastAPI server. |
 | `build-mobile.ps1` | Script PowerShell tự động build frontend Vite, đồng bộ Capacitor sang Android/iOS và biên dịch Android APK (nếu có Java/Android SDK). |
+| `install/` | Thư mục cài đặt ứng dụng: `README.md` (hướng dẫn PC/Android/iOS), `install-pc.bat` & `install-pc.ps1` (bộ cài 1 chạm cho Windows + tạo Shortcut Desktop), `install-android.ps1` (cài APK qua USB/ADB). |
+| `.github/workflows/build-mobile.yml` | GitHub Actions tự động build Android APK (`Antigravity-Pulse-Android.apk`), phát hành lên GitHub Releases và đóng gói dự án iOS Xcode. |
 | `skills-lock.json` | File khóa phiên bản các Agent Skills đi kèm trong workspace. |
 | `.agents/skills/lucian-uxui/` | Bộ skill hỗ trợ thiết kế & chuyển đổi UI/UX (`SKILL.md`, `references/porting.md`, `scripts/lucian-uxui.mjs`). |
 

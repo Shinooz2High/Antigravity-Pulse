@@ -5,7 +5,8 @@
 Mobile-first PWA (with Capacitor native support) & Real-time PC Bridge for **Google Antigravity**.  
 Ứng dụng web/PWA điều khiển từ xa trên điện thoại kết nối trực tiếp với **Google Antigravity** & workspace trên PC theo thời gian thực.
 
-> Xem ghi chú chi tiết vai trò của từng file trong dự án tại **[NOTES.md](NOTES.md)**.
+> 📦 **Cài đặt ứng dụng (PC / Android / iOS):** xem thư mục **[install/](install/)** (`install/install-pc.bat` cài 1 chạm cho Windows, hướng dẫn PWA & link tải APK Android).  
+> 📄 Xem ghi chú chi tiết vai trò của từng file trong dự án tại **[NOTES.md](NOTES.md)**.
 
 ---
 
@@ -54,7 +55,10 @@ Mobile-first PWA (with Capacitor native support) & Real-time PC Bridge for **Goo
 │       ├── lib/            # api, native (Capacitor), utils
 │       └── pages/          # Dashboard, Prompt, Outputs, Projects, Settings
 ├── .agents/                # Agent skills đi kèm (lucian-uxui)
+├── .github/workflows/      # GitHub Actions tự động build Android APK & iOS Xcode project
+├── install/                # Thư mục cài đặt ứng dụng (PC Installer 1 chạm, Android APK/ADB, iOS)
 ├── start.bat / start.ps1   # Script khởi chạy nhanh một chạm trên Windows
+├── build-mobile.ps1        # Script build gói di động Capacitor Android/iOS
 ├── .env.example            # Mẫu biến môi trường
 ├── NOTES.md                # Ghi chú chi tiết toàn bộ các file trong dự án
 └── LICENSE                 # Giấy phép MIT
