@@ -10,6 +10,7 @@ import {
   Clock,
   Code2,
   Command,
+  Download,
   FileCode,
   FolderGit2,
   FolderPlus,
@@ -48,7 +49,9 @@ import type {
 import { useCustomTheme } from '../contexts/CustomThemeContext';
 import { CustomThemeModal } from './theme/CustomThemeModal';
 import { api } from '../lib/api';
+import type { ConversationThread } from '../lib/conversations';
 import {
+  AppDownloadCard,
   CommandSearch,
   FileTreeExplorer,
   QrShareCard,
@@ -71,6 +74,10 @@ export interface LayoutProps {
   onSelectProject?: (projectId: string) => void;
   runs?: PromptRun[];
   selectedRunId?: string | null;
+  conversations?: ConversationThread[];
+  selectedConversationId?: string | null;
+  onSelectConversation?: (convId: string) => void;
+  onMergeAllConversations?: () => void;
   onSelectRun?: (runId: string) => void;
   onNewConversation?: () => void;
   onOpenArtifact?: (target: ArtifactModalTarget) => void;
@@ -92,6 +99,10 @@ export function Layout({
   onSelectProject,
   runs = [],
   selectedRunId = null,
+  conversations = [],
+  selectedConversationId = null,
+  onSelectConversation,
+  onMergeAllConversations,
   onSelectRun,
   onNewConversation,
   onOpenArtifact,
@@ -106,6 +117,7 @@ export function Layout({
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [fileTreeNodes, setFileTreeNodes] = useState<FileTreeNode[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loadingRootTree, setLoadingRootTree] = useState(false);
@@ -262,19 +274,31 @@ export function Layout({
       },
     }));
 
-    const runItems: CommandSearchItem[] = runs.slice(0, 12).map((r) => ({
-      id: `run-${r.id}`,
-      kind: 'chat',
-      title: r.prompt,
-      meta: r.project_name || 'Chat',
-      onSelect: () => {
-        onSelectRun?.(r.id);
-        onTabChange('prompt');
-      },
-    }));
+    const convItems: CommandSearchItem[] =
+      conversations.length > 0
+        ? conversations.slice(0, 12).map((conv) => ({
+            id: `conv-${conv.id}`,
+            kind: 'chat',
+            title: conv.title,
+            meta: `${conv.runs.length} tin · ${conv.projectName}`,
+            onSelect: () => {
+              onSelectConversation?.(conv.id);
+              onTabChange('prompt');
+            },
+          }))
+        : runs.slice(0, 12).map((r) => ({
+            id: `run-${r.id}`,
+            kind: 'chat',
+            title: r.prompt,
+            meta: r.project_name || 'Chat',
+            onSelect: () => {
+              onSelectRun?.(r.id);
+              onTabChange('prompt');
+            },
+          }));
 
-    return [...actions, ...projectItems, ...runItems];
-  }, [projects, runs, onNewConversation, onSelectProject, onSelectRun, onTabChange, playTaskVoice, setThemeModalOpen]);
+    return [...actions, ...projectItems, ...convItems];
+  }, [projects, runs, conversations, onNewConversation, onSelectConversation, onSelectProject, onSelectRun, onTabChange, playTaskVoice, setThemeModalOpen]);
 
   return (
     <div className="agy-app-shell flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden text-slate-100 select-none">
@@ -628,6 +652,23 @@ export function Layout({
                   {themeConfig.themeName.split(' ')[0]}
                 </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDownloadModalOpen(true);
+                  closeSidebarOnMobile();
+                }}
+                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 md:py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Download className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Tải Desktop App</span>
+                </span>
+                <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                  Đang phát triển
+                </span>
+              </button>
             </div>
 
             {/* Scrollable Conversation List & Projects */}
@@ -686,29 +727,47 @@ export function Layout({
               <div>
                 <div className="flex items-center justify-between px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <span>Recent Conversations</span>
-                  <span className="text-[9px] text-slate-500 font-mono">{runs.length}</span>
+                  <div className="flex items-center gap-1.5">
+                    {conversations.length > 1 && onMergeAllConversations && (
+                      <button
+                        type="button"
+                        onClick={onMergeAllConversations}
+                        className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold normal-case text-cyan-300 transition hover:bg-cyan-500/20"
+                        title="Gộp tất cả thành 1 cuộc trò chuyện"
+                      >
+                        Gộp 1
+                      </button>
+                    )}
+                    <span className="text-[9px] text-slate-500 font-mono">
+                      {conversations.length}
+                    </span>
+                  </div>
                 </div>
                 <div className="space-y-0.5">
-                  {runs.length === 0 ? (
+                  {conversations.length === 0 ? (
                     <p className="px-2.5 py-2 text-[11px] text-slate-500 italic">
-                      Chưa có phiên prompt nào
+                      Chưa có cuộc trò chuyện nào
                     </p>
                   ) : (
-                    runs.slice(0, 15).map((r) => {
-                      const isSelected = r.id === selectedRunId && activeTab === 'prompt';
+                    conversations.slice(0, 15).map((conv) => {
+                      const isSelected =
+                        conv.id === selectedConversationId && activeTab === 'prompt';
                       const statusDot =
-                        r.status === 'completed'
+                        conv.status === 'completed'
                           ? 'bg-emerald-400'
-                          : r.status === 'running'
+                          : conv.status === 'running' ||
+                              conv.status === 'queued' ||
+                              conv.status === 'awaiting_approval'
                             ? 'bg-amber-400 animate-pulse'
                             : 'bg-rose-400';
 
                       return (
                         <button
-                          key={r.id}
+                          key={conv.id}
                           type="button"
                           onClick={() => {
-                            if (onSelectRun) onSelectRun(r.id);
+                            if (onSelectConversation) onSelectConversation(conv.id);
+                            else if (onSelectRun) onSelectRun(conv.latestRun.id);
                             onTabChange('prompt');
                             closeSidebarOnMobile();
                           }}
@@ -721,11 +780,18 @@ export function Layout({
                         >
                           <div className="flex min-w-0 items-center gap-2">
                             <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusDot)} />
-                            <span className="truncate">{r.prompt}</span>
+                            <span className="truncate">{conv.title}</span>
                           </div>
-                          <span className="shrink-0 pl-1 text-[9px] text-slate-500 opacity-80 group-hover:opacity-100">
-                            {formatRelativeTime(r.created_at)}
-                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5 pl-1">
+                            {conv.runs.length > 1 && (
+                              <span className="rounded bg-white/10 px-1 py-0.2 text-[9px] font-mono text-slate-300">
+                                {conv.runs.length}
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-500 opacity-80 group-hover:opacity-100">
+                              {formatRelativeTime(conv.updatedAt)}
+                            </span>
+                          </div>
                         </button>
                       );
                     })
@@ -947,6 +1013,31 @@ export function Layout({
               placeholder="Tìm lệnh, dự án, hội thoại..."
               onClose={() => setMobileSearchOpen(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* DESKTOP APP DOWNLOAD MODAL (Windows / macOS / Linux - Dev)     */}
+      {/* ============================================================== */}
+      {downloadModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-md"
+          onClick={() => setDownloadModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-[420px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setDownloadModalOpen(false)}
+              aria-label="Đóng"
+              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <AppDownloadCard />
           </div>
         </div>
       )}

@@ -55,7 +55,6 @@ import {
   StreamingAgentAvatar,
   StreamingCaret,
   StreamingControlButton,
-  StreamingThinkingDots,
   ThinkingAccordion,
   type AgentTaskStepItem,
   type UploadQueueItem,
@@ -64,6 +63,7 @@ import {
 interface PromptPageProps {
   projects: Project[];
   runs: PromptRun[];
+  conversationRuns: PromptRun[];
   selectedProjectId: string;
   selectedRunId: string | null;
   defaultEngine: EngineMode;
@@ -95,9 +95,331 @@ const EXTRA_AUTOCOMPLETE = [
   'Check git diff and review all recent changes for potential bugs',
 ];
 
+function buildAgentSteps(run: PromptRun, runIsActive: boolean): AgentTaskStepItem[] {
+  const done = !runIsActive;
+  const hasThoughts = Boolean(run.thoughts?.trim());
+  const toolCount = run.tool_calls?.length ?? 0;
+  const anyToolRunning = Boolean(
+    run.tool_calls?.some((tc) => tc.status === 'running' || tc.status === 'pending')
+  );
+  const hasResponse = Boolean(run.response_text?.trim());
+  const artCount = run.output_artifacts?.length ?? 0;
+
+  return [
+    {
+      id: 'context',
+      label: 'Đọc ngữ cảnh dự án',
+      meta: run.project_name || 'Workspace',
+      state: done || hasThoughts || toolCount > 0 || hasResponse ? 'done' : 'run',
+    },
+    {
+      id: 'plan',
+      label: 'Phân tích & lập kế hoạch',
+      meta: hasThoughts ? 'Thought stream' : 'Ready',
+      state:
+        done || toolCount > 0 || hasResponse
+          ? 'done'
+          : hasThoughts
+            ? 'run'
+            : 'wait',
+    },
+    {
+      id: 'tools',
+      label: toolCount > 0 ? 'Thực thi công cụ trên PC' : 'Xử lý yêu cầu Agent',
+      meta: toolCount > 0 ? `${toolCount} tools` : getEngineLabel(run.engine_mode),
+      state: done
+        ? 'done'
+        : anyToolRunning
+          ? 'run'
+          : toolCount > 0 && hasResponse
+            ? 'done'
+            : toolCount > 0
+              ? 'run'
+              : 'wait',
+    },
+    {
+      id: 'finish',
+      label: 'Tổng hợp & xuất kết quả',
+      meta: artCount > 0 ? `${artCount} files` : run.status === 'completed' ? 'OK' : run.status,
+      state: done ? 'done' : hasResponse ? 'run' : 'wait',
+    },
+  ];
+}
+
+interface ConversationTurnProps {
+  run: PromptRun;
+  isLatest: boolean;
+  modelDisplayName: string;
+  isDark: boolean;
+  cancelling: boolean;
+  submitting: boolean;
+  onCancel: (runId: string) => void;
+  onRegenerate: (prompt: string) => void;
+  onOpenArtifact: (target: ArtifactModalTarget) => void;
+}
+
+function ConversationTurn({
+  run,
+  isLatest,
+  modelDisplayName,
+  isDark,
+  cancelling,
+  submitting,
+  onCancel,
+  onRegenerate,
+  onOpenArtifact,
+}: ConversationTurnProps) {
+  const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
+  const runIsActive =
+    run.status === 'running' ||
+    run.status === 'queued' ||
+    run.status === 'awaiting_approval';
+
+  const agentSteps = useMemo(() => buildAgentSteps(run, runIsActive), [run, runIsActive]);
+  const st = getPromptStatusInfo(run.status);
+
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      {/* User Message Bubble with Double Border Frame (Lucian #086 pop) */}
+      <div className="flex justify-end">
+        <div
+          className="agy-user-bubble-frame u086-pop max-w-[92%] sm:max-w-[85%] rounded-2xl p-[1.5px] shadow-lg"
+          style={{
+            background:
+              'linear-gradient(135deg, var(--ct-primary, #38bdf8), var(--ct-secondary, #c084fc))',
+          }}
+        >
+          <div className="rounded-[15px] bg-[#101426]/90 p-3 sm:p-4 backdrop-blur-xl">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-500 text-[10px] font-bold text-white">
+                U
+              </div>
+              <span className="text-[11px] font-semibold text-slate-300">Sensei</span>
+              <span className="text-[10px] text-slate-400">
+                • {formatClockTime(run.created_at)}
+              </span>
+            </div>
+            <p className="text-sm font-medium leading-relaxed text-white whitespace-pre-wrap break-words">
+              {run.prompt}
+            </p>
+
+            {/* Attachment tags if any */}
+            {run.attachments && run.attachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {run.attachments.map((att) => (
+                  <span
+                    key={att.id}
+                    className="inline-flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[10px] text-slate-300"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    <span>{att.name || 'Tệp đính kèm'}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Agent Response Card */}
+      <div
+        data-testid="agent-response"
+        className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1222]/80 p-3.5 sm:p-5 shadow-xl backdrop-blur-xl"
+      >
+        {/* Agent Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-2.5">
+            <StreamingAgentAvatar isGenerating={runIsActive} />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white">Antigravity Agent</span>
+                <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-mono text-cyan-300">
+                  {modelDisplayName}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {run.project_name} • {getEngineLabel(run.engine_mode)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
+                st.tone === 'cyan' && 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
+                st.tone === 'emerald' && 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+                st.tone === 'amber' && 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+                st.tone === 'rose' && 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+                st.tone === 'slate' && 'bg-slate-800 text-slate-300'
+              )}
+            >
+              {st.pulse && <span className="h-2 w-2 animate-ping rounded-full bg-current" />}
+              {st.label}
+            </span>
+
+            <StreamingControlButton
+              isGenerating={runIsActive}
+              disabled={cancelling || submitting}
+              onStop={() => onCancel(run.id)}
+              onRegenerate={() => onRegenerate(run.prompt)}
+            />
+          </div>
+        </div>
+
+        {/* Lucian #454 Live Agent Task Steps Progress Card */}
+        <div className="mt-4">
+          <AgentTaskSteps
+            steps={agentSteps}
+            isDone={!runIsActive}
+            startedAt={run.created_at}
+            finishedAt={run.finished_at || run.created_at}
+            workingLabel="Agent đang thực thi"
+            doneLabel={run.status === 'completed' ? 'Hoàn tất' : st.label}
+            onReplay={() => onRegenerate(run.prompt)}
+          />
+        </div>
+
+        {/* Error Banner if any */}
+        {run.error && (
+          <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{run.error}</span>
+          </div>
+        )}
+
+        {/* Lucian #453 Collapsible Thoughts Accordion */}
+        {(run.thoughts || runIsActive) && (
+          <div className="mt-4">
+            <ThinkingAccordion
+              thoughts={run.thoughts || ''}
+              isThinking={Boolean(runIsActive && !run.response_text)}
+              startedAt={run.created_at}
+              finishedAt={run.finished_at || run.created_at}
+              defaultOpen={isLatest && runIsActive}
+            />
+          </div>
+        )}
+
+        {/* Tool Execution Steps */}
+        {run.tool_calls && run.tool_calls.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Công cụ & Lệnh đã chạy ({run.tool_calls.length})
+            </p>
+            <div className="space-y-1.5">
+              {run.tool_calls.map((tc) => {
+                const expanded = expandedToolId === tc.id;
+                return (
+                  <div
+                    key={tc.id}
+                    className="rounded-xl border border-white/10 bg-[#070a14]/70 overflow-hidden"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedToolId(expanded ? null : tc.id)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition hover:bg-white/5"
+                    >
+                      <span className="flex items-center gap-2 font-mono font-semibold text-cyan-300">
+                        <Terminal className="h-3.5 w-3.5" />
+                        {tc.name}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                            tc.status === 'completed' || tc.status === 'approved'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : tc.status === 'denied' || tc.status === 'error'
+                                ? 'bg-rose-500/20 text-rose-300'
+                                : 'bg-amber-500/20 text-amber-300'
+                          )}
+                        >
+                          {tc.status}
+                        </span>
+                        {expanded ? (
+                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                        )}
+                      </span>
+                    </button>
+                    {expanded && tc.args !== undefined && (
+                      <pre className="max-h-48 overflow-auto border-t border-white/10 p-3 font-mono text-[11px] text-slate-300 bg-black/40">
+                        {typeof tc.args === 'string'
+                          ? tc.args
+                          : JSON.stringify(tc.args, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Main Response Markdown Body */}
+        {(run.response_text || !runIsActive) && (
+          <div className="mt-5">
+            {run.response_text ? (
+              <div className="agy-markdown text-sm leading-relaxed text-slate-200">
+                <MarkdownRenderer content={run.response_text} isDark={isDark} />
+                {runIsActive && <StreamingCaret />}
+                {run.status === 'cancelled' && (
+                  <span className="u086-stop">— Đã dừng tại đây</span>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">
+                Phiên chạy đã kết thúc mà không có văn bản kết quả.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Output Artifacts Links */}
+        {run.output_artifacts && run.output_artifacts.length > 0 && (
+          <div className="mt-6 border-t border-white/10 pt-4">
+            <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Tệp kết quả sinh ra ({run.output_artifacts.length})
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {run.output_artifacts.map((art) => (
+                <button
+                  key={art.id || art.rel_path}
+                  type="button"
+                  onClick={() =>
+                    onOpenArtifact({
+                      kind: 'run_artifact',
+                      runId: run.id,
+                      artifact: art,
+                    })
+                  }
+                  className="group flex items-center gap-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-left transition hover:bg-cyan-500/20"
+                >
+                  <FileCode className="h-5 w-5 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-white">
+                      {art.name}
+                    </p>
+                    <p className="truncate text-[10px] text-slate-400">
+                      {formatBytes(art.size)} • Nhấn để xem toàn màn hình
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PromptPage({
   projects,
   runs,
+  conversationRuns,
   selectedProjectId,
   selectedRunId,
   defaultEngine,
@@ -105,7 +427,7 @@ export function PromptPage({
   currentModel = 'gemini-4-argon',
   isDark,
   onSelectProject,
-  onSelectRun,
+  onSelectRun: _onSelectRun,
   onRunCreated,
   onModelChange,
   onOpenArtifact,
@@ -122,8 +444,6 @@ export function PromptPage({
   const [selectedActionMode, setSelectedActionMode] = useState<'run_agent' | 'code_review' | 'deep_research'>('run_agent');
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [thoughtsOpen, setThoughtsOpen] = useState(true);
-  const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploadStatus, setUploadStatus] = useState<'ready' | 'uploading' | 'done' | 'error'>('ready');
 
@@ -137,12 +457,28 @@ export function PromptPage({
   );
 
   const activeRun = useMemo(() => {
+    if (conversationRuns.length > 0) {
+      return conversationRuns[conversationRuns.length - 1];
+    }
     if (selectedRunId) {
       const found = runs.find((r) => r.id === selectedRunId);
       if (found) return found;
     }
     return null;
-  }, [runs, selectedRunId]);
+  }, [conversationRuns, runs, selectedRunId]);
+
+  const runningRun = useMemo(
+    () =>
+      [...conversationRuns]
+        .reverse()
+        .find(
+          (r) =>
+            r.status === 'running' ||
+            r.status === 'queued' ||
+            r.status === 'awaiting_approval'
+        ) || null,
+    [conversationRuns]
+  );
 
   // Sync engine/policy defaults when project changes
   useEffect(() => {
@@ -160,12 +496,17 @@ export function PromptPage({
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }, [promptText]);
 
-  // Scroll to bottom on new responses
+  // Scroll to bottom on new responses or turns
   useEffect(() => {
-    if (activeRun) {
+    if (conversationRuns.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [activeRun?.response_text, activeRun?.thoughts, activeRun?.tool_calls?.length]);
+  }, [
+    conversationRuns.length,
+    activeRun?.response_text,
+    activeRun?.thoughts,
+    activeRun?.tool_calls?.length,
+  ]);
 
   const handleSendPrompt = async (customPrompt?: string) => {
     const textToSend = (customPrompt ?? promptText).trim();
@@ -206,11 +547,9 @@ export function PromptPage({
       });
 
       onRunCreated(created);
-      onSelectRun(created.id);
       setPromptText('');
       setAttachments([]);
       setUploadStatus('ready');
-      setThoughtsOpen(true);
       onNotify('Đã gửi câu lệnh tới Antigravity Agent trên PC', 'success');
     } catch (err) {
       if (attachments.length > 0) setUploadStatus('error');
@@ -230,11 +569,12 @@ export function PromptPage({
     }
   };
 
-  const handleCancel = async () => {
-    if (!activeRun || cancelling) return;
+  const handleCancel = async (targetRunId?: string) => {
+    const idToCancel = targetRunId || runningRun?.id || activeRun?.id;
+    if (!idToCancel || cancelling) return;
     setCancelling(true);
     try {
-      await api.cancelPromptRun(activeRun.id);
+      await api.cancelPromptRun(idToCancel);
       onNotify('Đã gửi yêu cầu dừng tác vụ tới PC', 'info');
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể hủy tác vụ', 'error');
@@ -271,65 +611,7 @@ export function PromptPage({
     [attachments, uploadStatus]
   );
 
-  const isRunning =
-    activeRun &&
-    (activeRun.status === 'running' ||
-      activeRun.status === 'queued' ||
-      activeRun.status === 'awaiting_approval');
-
-  const agentSteps = useMemo<AgentTaskStepItem[]>(() => {
-    if (!activeRun) return [];
-    const done = !isRunning;
-    const hasThoughts = Boolean(activeRun.thoughts?.trim());
-    const toolCount = activeRun.tool_calls?.length ?? 0;
-    const anyToolRunning = Boolean(
-      activeRun.tool_calls?.some(
-        (tc) => tc.status === 'running' || tc.status === 'pending'
-      )
-    );
-    const hasResponse = Boolean(activeRun.response_text?.trim());
-    const artCount = activeRun.output_artifacts?.length ?? 0;
-
-    return [
-      {
-        id: 'context',
-        label: 'Đọc ngữ cảnh dự án',
-        meta: activeRun.project_name || 'Workspace',
-        state: done || hasThoughts || toolCount > 0 || hasResponse ? 'done' : 'run',
-      },
-      {
-        id: 'plan',
-        label: 'Phân tích & lập kế hoạch',
-        meta: hasThoughts ? 'Thought stream' : 'Ready',
-        state:
-          done || toolCount > 0 || hasResponse
-            ? 'done'
-            : hasThoughts
-              ? 'run'
-              : 'wait',
-      },
-      {
-        id: 'tools',
-        label: toolCount > 0 ? 'Thực thi công cụ trên PC' : 'Xử lý yêu cầu Agent',
-        meta: toolCount > 0 ? `${toolCount} tools` : getEngineLabel(activeRun.engine_mode),
-        state: done
-          ? 'done'
-          : anyToolRunning
-            ? 'run'
-            : toolCount > 0 && hasResponse
-              ? 'done'
-              : toolCount > 0
-                ? 'run'
-                : 'wait',
-      },
-      {
-        id: 'finish',
-        label: 'Tổng hợp & xuất kết quả',
-        meta: artCount > 0 ? `${artCount} files` : activeRun.status === 'completed' ? 'OK' : activeRun.status,
-        state: done ? 'done' : hasResponse ? 'run' : 'wait',
-      },
-    ];
-  }, [activeRun, isRunning]);
+  const isRunning = Boolean(runningRun);
 
   const autocompleteSuggestions = useMemo(() => {
     const historyPrompts = runs
@@ -355,7 +637,7 @@ export function PromptPage({
       {/* CONVERSATION CANVAS / EMPTY STATE GREETING                     */}
       {/* ============================================================== */}
       <div className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-8 sm:py-6">
-        {!activeRun ? (
+        {conversationRuns.length === 0 ? (
           /* ========================================================== */
           /* EMPTY STATE: 1:1 CENTERED HANDWRITING GREETING (TAWA MALI) */
           /* ========================================================== */
@@ -391,242 +673,23 @@ export function PromptPage({
           </div>
         ) : (
           /* ========================================================== */
-          /* ACTIVE RUN: CONVERSATION STREAM (USER BUBBLE + AGENT CARD) */
+          /* UNIFIED CONVERSATION STREAM (ALL TURNS IN 1 CONVERSATION)  */
           /* ========================================================== */
-          <div className="mx-auto max-w-4xl space-y-4 sm:space-y-6 pb-4">
-            {/* User Message Bubble with Double Border Frame (Lucian #086 pop) */}
-            <div className="flex justify-end">
-              <div
-                className="agy-user-bubble-frame u086-pop max-w-[92%] sm:max-w-[85%] rounded-2xl p-[1.5px] shadow-lg"
-                style={{
-                  background:
-                    'linear-gradient(135deg, var(--ct-primary, #38bdf8), var(--ct-secondary, #c084fc))',
-                }}
-              >
-                <div className="rounded-[15px] bg-[#101426]/90 p-3 sm:p-4 backdrop-blur-xl">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-500 text-[10px] font-bold text-white">
-                      U
-                    </div>
-                    <span className="text-[11px] font-semibold text-slate-300">Sensei</span>
-                    <span className="text-[10px] text-slate-400">
-                      • {formatClockTime(activeRun.created_at)}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium leading-relaxed text-white whitespace-pre-wrap break-words">
-                    {activeRun.prompt}
-                  </p>
-
-                  {/* Attachment tags if any */}
-                  {activeRun.attachment_ids && activeRun.attachment_ids.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {activeRun.attachment_ids.map((id) => (
-                        <span
-                          key={id}
-                          className="inline-flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[10px] text-slate-300"
-                        >
-                          <Paperclip className="h-3 w-3" />
-                          <span>Tệp đính kèm</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Agent Response Card */}
-            <div
-              data-testid="agent-response"
-              className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1222]/80 p-3.5 sm:p-5 shadow-xl backdrop-blur-xl"
-            >
-              {/* Agent Header */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-                <div className="flex items-center gap-2.5">
-                  <StreamingAgentAvatar isGenerating={Boolean(isRunning)} />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-white">Antigravity Agent</span>
-                      <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-mono text-cyan-300">
-                        {modelDisplayName}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400">
-                      {activeRun.project_name} • {getEngineLabel(activeRun.engine_mode)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    const st = getPromptStatusInfo(activeRun.status);
-                    return (
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
-                          st.tone === 'cyan' && 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
-                          st.tone === 'emerald' && 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-                          st.tone === 'amber' && 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-                          st.tone === 'rose' && 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
-                          st.tone === 'slate' && 'bg-slate-800 text-slate-300'
-                        )}
-                      >
-                        {st.pulse && <span className="h-2 w-2 animate-ping rounded-full bg-current" />}
-                        {st.label}
-                      </span>
-                    );
-                  })()}
-
-                  <StreamingControlButton
-                    isGenerating={Boolean(isRunning)}
-                    disabled={cancelling || submitting}
-                    onStop={handleCancel}
-                    onRegenerate={() => handleSendPrompt(activeRun.prompt)}
-                  />
-                </div>
-              </div>
-
-              {/* Lucian #454 Live Agent Task Steps Progress Card */}
-              <div className="mt-4">
-                <AgentTaskSteps
-                  steps={agentSteps}
-                  isDone={!isRunning}
-                  startedAt={activeRun.created_at}
-                  finishedAt={activeRun.finished_at || activeRun.created_at}
-                  workingLabel="Agent đang thực thi"
-                  doneLabel={activeRun.status === 'completed' ? 'Hoàn tất' : getPromptStatusInfo(activeRun.status).label}
-                  onReplay={() => handleSendPrompt(activeRun.prompt)}
-                />
-              </div>
-
-              {/* Error Banner if any */}
-              {activeRun.error && (
-                <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{activeRun.error}</span>
-                </div>
-              )}
-
-              {/* Lucian #453 Collapsible Thoughts Accordion */}
-              {(activeRun.thoughts || isRunning) && (
-                <div className="mt-4">
-                  <ThinkingAccordion
-                    thoughts={activeRun.thoughts || ''}
-                    isThinking={Boolean(isRunning && !activeRun.response_text)}
-                    startedAt={activeRun.created_at}
-                    finishedAt={activeRun.finished_at || activeRun.created_at}
-                    defaultOpen={thoughtsOpen}
-                  />
-                </div>
-              )}
-
-              {/* Tool Execution Steps */}
-              {activeRun.tool_calls && activeRun.tool_calls.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    Công cụ & Lệnh đã chạy ({activeRun.tool_calls.length})
-                  </p>
-                  <div className="space-y-1.5">
-                    {activeRun.tool_calls.map((tc) => {
-                      const expanded = expandedToolId === tc.id;
-                      return (
-                        <div
-                          key={tc.id}
-                          className="rounded-xl border border-white/10 bg-[#070a14]/70 overflow-hidden"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setExpandedToolId(expanded ? null : tc.id)}
-                            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition hover:bg-white/5"
-                          >
-                            <span className="flex items-center gap-2 font-mono font-semibold text-cyan-300">
-                              <Terminal className="h-3.5 w-3.5" />
-                              {tc.name}
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                  tc.status === 'completed' || tc.status === 'approved'
-                                    ? 'bg-emerald-500/20 text-emerald-300'
-                                    : tc.status === 'denied' || tc.status === 'error'
-                                      ? 'bg-rose-500/20 text-rose-300'
-                                      : 'bg-amber-500/20 text-amber-300'
-                                )}
-                              >
-                                {tc.status}
-                              </span>
-                              {expanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
-                            </span>
-                          </button>
-                          {expanded && tc.args !== undefined && (
-                            <pre className="max-h-48 overflow-auto border-t border-white/10 p-3 font-mono text-[11px] text-slate-300 bg-black/40">
-                              {typeof tc.args === 'string'
-                                ? tc.args
-                                : JSON.stringify(tc.args, null, 2)}
-                            </pre>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Main Response Markdown Body */}
-              <div className="mt-5">
-                {activeRun.response_text ? (
-                  <div className="agy-markdown text-sm leading-relaxed text-slate-200">
-                    <MarkdownRenderer content={activeRun.response_text} isDark={isDark} />
-                    {isRunning && <StreamingCaret />}
-                    {activeRun.status === 'cancelled' && (
-                      <span className="u086-stop">— Đã dừng tại đây</span>
-                    )}
-                  </div>
-                ) : isRunning ? (
-                  <StreamingThinkingDots label="Agent đang thao tác trên PC..." />
-                ) : (
-                  <p className="text-xs text-slate-400 italic">
-                    Phiên chạy đã kết thúc mà không có văn bản kết quả.
-                  </p>
-                )}
-              </div>
-
-              {/* Output Artifacts Links */}
-              {activeRun.output_artifacts && activeRun.output_artifacts.length > 0 && (
-                <div className="mt-6 border-t border-white/10 pt-4">
-                  <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    Tệp kết quả sinh ra ({activeRun.output_artifacts.length})
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {activeRun.output_artifacts.map((art) => (
-                      <button
-                        key={art.id || art.rel_path}
-                        type="button"
-                        onClick={() =>
-                          onOpenArtifact({
-                            kind: 'run_artifact',
-                            runId: activeRun.id,
-                            artifact: art,
-                          })
-                        }
-                        className="group flex items-center gap-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-left transition hover:bg-cyan-500/20"
-                      >
-                        <FileCode className="h-5 w-5 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-semibold text-white">
-                            {art.name}
-                          </p>
-                          <p className="truncate text-[10px] text-slate-400">
-                            {formatBytes(art.size)} • Nhấn để xem toàn màn hình
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8 pb-4">
+            {conversationRuns.map((run, idx) => (
+              <ConversationTurn
+                key={run.id}
+                run={run}
+                isLatest={idx === conversationRuns.length - 1}
+                modelDisplayName={modelDisplayName}
+                isDark={isDark}
+                cancelling={cancelling}
+                submitting={submitting}
+                onCancel={handleCancel}
+                onRegenerate={(p) => handleSendPrompt(p)}
+                onOpenArtifact={onOpenArtifact}
+              />
+            ))}
 
             <div ref={messagesEndRef} />
           </div>

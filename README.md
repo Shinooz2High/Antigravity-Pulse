@@ -163,6 +163,8 @@ npm.cmd run typecheck
 
 ---
 
-## Giấy phép / License
+## Giấy phép & Pháp lý / License & Legal
 
-Dự án được phát hành theo giấy phép **MIT License** — xem chi tiết tại file [LICENSE](LICENSE).
+- **Giấy phép / License:** [MIT License](LICENSE)
+- **Điều Khoản Dịch Vụ / Terms of Service:** [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) • Web: [agypulse.dpdns.org/terms.html](https://agypulse.dpdns.org/terms.html)
+- **Chính Sách Bảo Mật / Privacy Policy:** [PRIVACY_POLICY.md](PRIVACY_POLICY.md) • Web: [agypulse.dpdns.org/privacy.html](https://agypulse.dpdns.org/privacy.html)

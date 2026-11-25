@@ -40,6 +40,100 @@
   color: var(--ux-accent);
 }
 
+.u393-dev-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 7px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .16);
+  border: 1px solid rgba(245, 158, 11, .38);
+  color: #fbbf24;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.u393-dev-pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, .8);
+}
+
+.u393-dl.is-dev {
+  background: linear-gradient(135deg, rgba(245, 158, 11, .22), rgba(217, 119, 6, .16));
+  color: #fde68a;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .45);
+}
+
+:root:not(.dark) .u393-dl.is-dev {
+  color: #92400e;
+  background: linear-gradient(135deg, rgba(245, 158, 11, .2), rgba(251, 191, 36, .16));
+}
+
+.u393-term {
+  margin-top: 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(56, 189, 248, .28);
+  background: rgba(6, 10, 22, .92);
+  overflow: hidden;
+  text-align: left;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  animation: u393-swap .32s cubic-bezier(.3, 1.3, .5, 1) both;
+}
+
+.u393-term-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(255, 255, 255, .03);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(148, 163, 184, .9);
+}
+
+.u393-term-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.u393-term-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.u393-term-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 9px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  word-break: break-all;
+  cursor: pointer;
+}
+
+.u393-term-body:hover {
+  background: rgba(56, 189, 248, .06);
+}
+
+.u393-term-ps {
+  flex: none;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
 .u393-tp h3 {
   margin: 4px 0 0;
   font-size: 19px;

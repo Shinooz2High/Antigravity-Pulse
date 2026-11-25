@@ -11,10 +11,13 @@ Tài liệu này mô tả chi tiết vai trò của từng thư mục và tập 
 | `README.md` | Tài liệu giới thiệu dự án, tính năng chính, hướng dẫn cài đặt, khởi chạy và kiểm thử. |
 | `NOTES.md` | File này — ghi chú chi tiết chức năng của từng file trong toàn bộ mã nguồn. |
 | `LICENSE` | Giấy phép sử dụng mã nguồn mở MIT License. |
+| `TERMS_OF_SERVICE.md` | Điều Khoản Dịch Vụ (song ngữ Việt/Anh) cho ứng dụng Antigravity Pulse. |
+| `PRIVACY_POLICY.md` | Chính Sách Bảo Mật (song ngữ Việt/Anh, bao gồm tuân thủ Google API Limited Use Policy). |
 | `.gitignore` | Quy tắc loại trừ các thư mục build/phụ thuộc (`.venv/`, `node_modules/`, `dist/`), file bí mật (`.env`, `backend/data/`) và binary bên thứ 3 (`cloudflared.exe`). |
 | `.env.example` | File mẫu cấu hình biến môi trường (`AGY_HOST`, `AGY_PORT`, `AGY_BRIDGE_PIN`, `GEMINI_API_KEY`, Vertex AI, v.v.). |
 | `start.bat` | Script khởi chạy nhanh trên Windows (nhấp đúp để gọi `start.ps1`). |
 | `start.ps1` | Script PowerShell tự động tạo Python `.venv`, build frontend PWA nếu chưa có, in mã QR/PIN ghép nối, tùy chọn bật Cloudflare Quick Tunnel (`-Tunnel`) và khởi chạy FastAPI server. |
+| `start.sh` | Script khởi chạy nhanh cho macOS / Linux (tương đương `start.ps1`). |
 | `build-mobile.ps1` | Script PowerShell tự động build frontend Vite, đồng bộ Capacitor sang Android/iOS và biên dịch Android APK (nếu có Java/Android SDK). |
 | `wrangler.jsonc` | Cấu hình deploy giao diện tĩnh SPA (`frontend/dist`) lên Cloudflare Workers Assets. |
 | `install/` | Thư mục cài đặt ứng dụng: `README.md` (hướng dẫn PC/Android/iOS), `install-pc.bat` & `install-pc.ps1` (bộ cài offline cho Windows), `install-android.ps1` (cài APK qua USB/ADB). |
@@ -97,6 +100,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | File / Thư mục | Mô tả chi tiết |
 | --- | --- |
 | `frontend/public/manifest.webmanifest` | Web App Manifest cho phép cài đặt app lên màn hình chính điện thoại (PWA). |
+| `frontend/public/terms.html`, `privacy.html` | Trang web tĩnh Điều Khoản Dịch Vụ và Chính Sách Bảo Mật phục vụ tại `agypulse.dpdns.org/terms.html` và `/privacy.html` (dùng cho Google OAuth Consent Screen & Mobile Store). |
 | `frontend/public/install.ps1` | Script cài đặt 1 dòng trên Windows PC phục vụ tại `https://agypulse.dpdns.org/install.ps1`. |
 | `frontend/public/cai-antigravity-pulse.bat` | File `.bat` bấm đúp cài đặt 1 chạm trên Windows phục vụ tại `https://agypulse.dpdns.org/cai-antigravity-pulse.bat`. |
 | `frontend/public/_redirects` | Quy tắc định tuyến SPA (`/* /index.html 200`) cho hosting tĩnh. |

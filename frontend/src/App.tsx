@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArtifactModal } from './components/ArtifactModal';
 import { AuthScreen } from './components/AuthScreen';
 import { Layout } from './components/Layout';
@@ -6,6 +6,13 @@ import { ToolApprovalBanner } from './components/ToolApprovalBanner';
 import { StackingToasts } from './components/library';
 import { useCustomTheme } from './contexts/CustomThemeContext';
 import { usePulseSocket } from './hooks/usePulseSocket';
+import {
+  DEFAULT_CONVERSATION_ID,
+  getRunConversationId,
+  groupRunsIntoConversations,
+  loadConversationMap,
+  saveConversationMap,
+} from './lib/conversations';
 import {
   api,
   clearToken,
@@ -91,6 +98,10 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [runs, setRuns] = useState<PromptRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [conversationMap, setConversationMap] = useState<Record<string, string>>(() =>
+    loadConversationMap()
+  );
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [sessions, setSessions] = useState<AntigravitySessionSummary[]>([]);
   const [brainDir, setBrainDir] = useState<string>('');
@@ -873,6 +884,54 @@ export default function App() {
     );
   }
 
+  const conversations = useMemo(
+    () => groupRunsIntoConversations(runs, conversationMap),
+    [runs, conversationMap]
+  );
+
+  const activeConversation = useMemo(() => {
+    if (!selectedConversationId) return null;
+    return conversations.find((c) => c.id === selectedConversationId) || null;
+  }, [conversations, selectedConversationId]);
+
+  const activeConversationRuns = activeConversation?.runs ?? [];
+
+  const handleSelectRunInConversation = useCallback(
+    (runId: string) => {
+      if (!runId) {
+        setSelectedRunId(null);
+        setSelectedConversationId(null);
+        return;
+      }
+      setSelectedRunId(runId);
+      const convId = getRunConversationId(runId, conversationMap);
+      setSelectedConversationId(convId);
+      setActiveTab('prompt');
+    },
+    [conversationMap]
+  );
+
+  const handleSelectConversation = useCallback(
+    (convId: string) => {
+      setSelectedConversationId(convId);
+      const conv = conversations.find((c) => c.id === convId);
+      setSelectedRunId(conv?.latestRun.id ?? null);
+      setActiveTab('prompt');
+    },
+    [conversations]
+  );
+
+  const handleMergeAllConversations = useCallback(() => {
+    const emptyMap: Record<string, string> = {};
+    setConversationMap(emptyMap);
+    saveConversationMap(emptyMap);
+    if (runs.length > 0) {
+      setSelectedConversationId(DEFAULT_CONVERSATION_ID);
+      setSelectedRunId(runs[0]?.id ?? null);
+    }
+    notify('Đã gộp toàn bộ hội thoại thành 1 cuộc trò chuyện duy nhất', 'success');
+  }, [runs, notify]);
+
   const activeRunCount = runs.filter(
     (r) => r.status === 'running' || r.status === 'queued' || r.status === 'awaiting_approval'
   ).length;
@@ -894,12 +953,14 @@ export default function App() {
         onSelectProject={setSelectedProjectId}
         runs={runs}
         selectedRunId={selectedRunId}
-        onSelectRun={(runId) => {
-          setSelectedRunId(runId);
-          setActiveTab('prompt');
-        }}
+        conversations={conversations}
+        selectedConversationId={selectedConversationId}
+        onSelectConversation={handleSelectConversation}
+        onMergeAllConversations={handleMergeAllConversations}
+        onSelectRun={handleSelectRunInConversation}
         onNewConversation={() => {
           setSelectedRunId(null);
+          setSelectedConversationId(null);
           setActiveTab('prompt');
         }}
         onOpenArtifact={setArtifactModalTarget}
@@ -915,7 +976,7 @@ export default function App() {
             tunnelBusy={tunnelBusy}
             onRefreshAll={refreshAll}
             onNavigate={setActiveTab}
-            onSelectRun={(runId) => setSelectedRunId(runId)}
+            onSelectRun={handleSelectRunInConversation}
             onSelectSession={(sessId) => setSelectedSessionId(sessId)}
             onOpenArtifact={setArtifactModalTarget}
             onToggleTunnel={handleToggleTunnel}
@@ -927,6 +988,7 @@ export default function App() {
           <PromptPage
             projects={projects}
             runs={runs}
+            conversationRuns={activeConversationRuns}
             selectedProjectId={selectedProjectId}
             selectedRunId={selectedRunId}
             defaultEngine={defaultEngine}
@@ -934,8 +996,20 @@ export default function App() {
             currentModel={currentModel}
             isDark={isDark}
             onSelectProject={setSelectedProjectId}
-            onSelectRun={setSelectedRunId}
+            onSelectRun={handleSelectRunInConversation}
             onRunCreated={(created) => {
+              const targetConvId =
+                selectedConversationId ||
+                (conversations.length === 0
+                  ? DEFAULT_CONVERSATION_ID
+                  : `conv-${Date.now()}`);
+              setConversationMap((prev) => {
+                const next = { ...prev, [created.id]: targetConvId };
+                saveConversationMap(next);
+                return next;
+              });
+              setSelectedConversationId(targetConvId);
+              setSelectedRunId(created.id);
               setRuns((prev) => {
                 if (prev.some((r) => r.id === created.id)) return prev;
                 return [created, ...prev];
