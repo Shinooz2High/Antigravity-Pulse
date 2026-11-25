@@ -60,9 +60,13 @@ class AuthService:
         return AuthTokenResponse(token=token, expires_at=expires_iso, device_id=device_id)
 
     def login_with_pin(self, pin: str, device_name: str | None = None) -> AuthTokenResponse:
-        expected = self.settings.get_pin()
+        expected_pin = self.settings.get_pin()
+        expected_quick = self.settings.get_quick_code()
         candidate = (pin or "").strip()
-        if not candidate or not hmac.compare_digest(candidate, expected):
+        normalized_quick = candidate.replace("-", "").replace(" ", "").upper()
+        pin_ok = bool(candidate and hmac.compare_digest(candidate, expected_pin))
+        quick_ok = bool(normalized_quick and hmac.compare_digest(normalized_quick, expected_quick))
+        if not (pin_ok or quick_ok):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid PIN",

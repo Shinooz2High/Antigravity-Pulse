@@ -44,6 +44,9 @@ export interface PairInfo {
   preferred_url: string;
   pair_url: string;
   pin: string;
+  quick_code?: string;
+  quick_short_url?: string | null;
+  quick_relay_synced?: boolean;
   qr_svg_data_url: string;
 }
 

@@ -132,7 +132,11 @@ async def start_tunnel(
     _: dict[str, Any] = Depends(require_auth),
 ) -> TunnelStartResponse:
     tunnel = request.app.state.tunnel_service
-    return await tunnel.start()
+    res = await tunnel.start()
+    quick_svc = getattr(request.app.state, "quick_connect_service", None)
+    if quick_svc is not None:
+        quick_svc.schedule_publish(force=True)
+    return res
 
 
 @router.post("/tunnel/stop", response_model=TunnelStopResponse)
@@ -141,7 +145,11 @@ async def stop_tunnel(
     _: dict[str, Any] = Depends(require_auth),
 ) -> TunnelStopResponse:
     tunnel = request.app.state.tunnel_service
-    return await tunnel.stop()
+    res = await tunnel.stop()
+    quick_svc = getattr(request.app.state, "quick_connect_service", None)
+    if quick_svc is not None:
+        quick_svc.schedule_publish(force=True)
+    return res
 
 
 @router.get("/models", response_model=ModelListResponse)

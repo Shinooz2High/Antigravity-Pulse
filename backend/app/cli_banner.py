@@ -8,6 +8,7 @@ import sys
 import qrcode
 
 from .config import AppConfig
+from .services.quick_connect_service import format_quick_code
 from .services.settings_service import SettingsService
 from .utils import get_lan_ip, get_tailscale_ip
 
@@ -43,11 +44,13 @@ def main() -> None:
     cfg = AppConfig()
     settings = SettingsService(cfg)
     pin = settings.get_pin()
+    quick_code = format_quick_code(settings.get_quick_code())
     pair_token = settings.get_pair_token()
 
     if args.tunnel_url:
         base_url = args.tunnel_url.rstrip("/")
         pair_url = f"{base_url}/?pair={pair_token}"
+        print(f"Quick Code   : {quick_code}  (Nhập 6 ký tự này trên App ĐT từ bất kỳ mạng nào!)")
         if args.short_url:
             print(f"Short URL    : {args.short_url.strip()}")
         print(f"Tunnel URL   : {base_url}")
@@ -62,11 +65,12 @@ def main() -> None:
     lan_url = f"http://{lan_ip}:{cfg.agy_port}"
     pair_url = f"{lan_url}/?pair={pair_token}"
 
+    print(f"Quick Code   : {quick_code}  (Nhập 6 ký tự này trên App ĐT — tự tìm PC qua Wi-Fi & 4G!)")
+    print(f"PIN          : {pin}")
     print(f"Local URL    : {local_url}")
     print(f"LAN URL      : {lan_url}")
     if ts_ip:
         print(f"Tailscale URL: http://{ts_ip}:{cfg.agy_port}")
-    print(f"PIN          : {pin}")
     print(f"Pairing URL  : {pair_url}")
     print("\nScan QR code on your mobile phone (same Wi-Fi):")
     _print_qr(pair_url)

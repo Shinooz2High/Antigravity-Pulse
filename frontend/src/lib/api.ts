@@ -384,6 +384,12 @@ export const api = {
     });
   },
 
+  syncQuickConnect(): Promise<PairInfo> {
+    return apiFetch<PairInfo>('/api/auth/quick-sync', {
+      method: 'POST',
+    });
+  },
+
   async getDevices(): Promise<DeviceInfo[]> {
     const res = await apiFetch<{ devices: DeviceInfo[] }>('/api/auth/devices');
     return res.devices ?? [];

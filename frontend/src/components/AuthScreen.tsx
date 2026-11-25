@@ -25,6 +25,7 @@ import {
   setDeviceName,
   setServerUrl,
 } from '../lib/api';
+import { isLikelyQuickCode, resolveQuickConnectCode } from '../lib/quickConnect';
 import {
   getMobilePlatform,
   isNativeApp,
@@ -61,9 +62,7 @@ export function AuthScreen({
   const platform = getMobilePlatform();
 
   const [serverInput, setServerInput] = useState(() => getServerUrl());
-  const [showServerField, setShowServerField] = useState(
-    () => needsServer || Boolean(getServerUrl())
-  );
+  const [showServerField, setShowServerField] = useState(false);
   const [pin, setPin] = useState('');
   const [device, setDevice] = useState(() => getDeviceName());
   const [submitting, setSubmitting] = useState(false);
@@ -377,26 +376,55 @@ export function AuthScreen({
       return;
     }
 
-    const effectiveServer = showServerField ? serverInput.trim() : '';
-    if (needsServer && !effectiveServer) {
-      setError(
-        'Vui lòng quét mã QR hoặc nhập địa chỉ máy chủ PC (VD: 192.168.1.84:8765 hoặc https://xxx.trycloudflare.com).'
-      );
+    const cleanedCode = pin.trim();
+    if (!cleanedCode) {
+      setError('Vui lòng nhập Mã Kết Nối 6 ký tự trên màn hình PC (hoặc quét mã QR).');
       return;
     }
 
-    const cleanedPin = pin.trim();
-    if (!cleanedPin) {
-      setError('Vui lòng nhập mã PIN 6 số trên máy tính hoặc quét mã QR.');
+    const effectiveServer = showServerField ? serverInput.trim() : '';
+
+    // 1-Step Magic Connect: 6-char Quick Code resolves PC automatically across Wi-Fi & 4G/5G without needing IP/URL!
+    if (isLikelyQuickCode(cleanedCode) && !effectiveServer) {
+      setSubmitting(true);
+      try {
+        setDeviceName(device);
+        if (!needsServer) {
+          try {
+            await onLogin(cleanedCode, device, '');
+            return;
+          } catch {
+            // Fall through to global Quick Connect relay lookup
+          }
+        }
+        const resolved = await resolveQuickConnectCode(cleanedCode);
+        setServerInput(resolved.serverUrl);
+        await onPairWithInput(resolved.pairToken, device, resolved.serverUrl);
+        return;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Không tìm thấy PC với Mã Kết Nối này.'
+        );
+        return;
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    const targetServer = effectiveServer || getServerUrl();
+    if (needsServer && !targetServer) {
+      setError(
+        'Hãy nhập Mã Kết Nối 6 ký tự (VD: K7M-9P4, có chữ cái) hoặc quét mã QR để tự động tìm PC không cần nhập IP!'
+      );
       return;
     }
 
     setSubmitting(true);
     try {
       setDeviceName(device);
-      await onLogin(cleanedPin, device, effectiveServer);
+      await onLogin(cleanedCode, device, targetServer);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Mã PIN không đúng hoặc không kết nối được tới PC.');
+      setError(err instanceof Error ? err.message : 'Mã không đúng hoặc không kết nối được tới PC.');
     } finally {
       setSubmitting(false);
     }
@@ -499,6 +527,51 @@ export function AuthScreen({
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
+              {/* 1-Step Magic Code / PIN Hero Input */}
+              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/[0.06] p-3.5 dark:border-cyan-500/25 dark:bg-[#090d16]">
+                <label className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-cyan-500" />
+                    Mã Kết Nối Nhanh (6 ký tự trên PC)
+                  </span>
+                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">
+                    Wi-Fi &amp; 4G/5G
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={pin}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Auto-uppercase short codes while leaving pasted URLs untouched
+                    setPin(v.length <= 10 && !v.includes('://') ? v.toUpperCase() : v);
+                  }}
+                  placeholder="VD: K7M-9P4 (hoặc PIN 6 số)"
+                  className="min-h-[52px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-center font-mono text-xl font-bold tracking-[0.22em] text-slate-900 outline-none transition placeholder:text-sm placeholder:font-normal placeholder:tracking-normal focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                />
+                <p className="mt-1.5 text-center text-[11px] text-slate-500 dark:text-slate-400">
+                  Chỉ cần nhập 6 ký tự trên PC — tự động tìm PC không cần gõ địa chỉ IP!
+                </p>
+              </div>
+
+              {displayError && (
+                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-300">
+                  {displayError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-110 disabled:opacity-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                {submitting ? 'Đang tự động tìm & kết nối PC...' : 'Kết nối ngay (1 chạm)'}
+              </button>
+
               {/* Fast QR & Link Pairing Actions */}
               <div className="grid grid-cols-2 gap-2.5">
                 <button
@@ -519,103 +592,69 @@ export function AuthScreen({
                 </button>
               </div>
 
-              {/* PC Server URL Input (Mandatory on Native Android/iOS, Optional on Web) */}
-              {showServerField ? (
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
-                      <Globe className="h-3.5 w-3.5 text-cyan-500" />
-                      Địa chỉ Máy chủ PC (Wi-Fi LAN / Tunnel)
-                    </label>
-                    {!needsServer && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setServerInput('');
-                          setShowServerField(false);
-                        }}
-                        className="text-[11px] font-medium text-slate-400 hover:text-cyan-500"
-                      >
-                        Dùng mặc định
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="url"
-                    inputMode="url"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    value={serverInput}
-                    onChange={(e) => setServerInput(e.target.value)}
-                    placeholder="VD: 192.168.1.84:8765 hoặc link Tunnel của PC"
-                    className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 font-mono text-xs text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-[#090d16] dark:text-white"
-                  />
-                  {remoteWeb && (
-                    <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                      Đang mở từ cổng web cố định — quét mã QR trên PC hoặc dán link Tunnel / IP LAN để kết nối.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-800 dark:bg-[#0b101b] dark:text-slate-400">
-                  <span className="flex items-center gap-1.5 truncate">
-                    <QrCode className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
-                    Kết nối trực tiếp tới máy chủ hiện tại
+              {/* Collapsible Advanced Options (Manual Server IP & Device Name) */}
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowServerField((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-xl px-2 py-1 text-[11px] font-medium text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-400"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-cyan-500" />
+                    {serverInput
+                      ? `Máy chủ đã lưu: ${serverInput}`
+                      : 'Tùy chọn nâng cao (Nhập IP thủ công / Tên thiết bị)'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowServerField(true)}
-                    className="ml-2 shrink-0 font-semibold text-cyan-600 hover:underline dark:text-cyan-400"
-                  >
-                    Đổi máy chủ PC
-                  </button>
-                </div>
-              )}
+                  <span className="font-semibold">{showServerField ? 'Thu gọn ▲' : 'Mở ▼'}</span>
+                </button>
 
-              <div>
-                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <KeyRound className="h-3.5 w-3.5 text-cyan-500" />
-                  Mã PIN ghép nối (hoặc dán Link QR)
-                </label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Nhập mã PIN 6 số..."
-                  className="min-h-[48px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-center font-mono text-lg tracking-[0.3em] text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-[#090d16] dark:text-white"
-                />
+                {showServerField && (
+                  <div className="mt-2 space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-[#0b101b]">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                          Địa chỉ Máy chủ PC (tùy chọn)
+                        </label>
+                        {serverInput && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setServerInput('');
+                              setServerUrl('');
+                            }}
+                            className="text-[10px] font-semibold text-rose-500 hover:underline"
+                          >
+                            Xóa máy chủ đã lưu
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        inputMode="url"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        value={serverInput}
+                        onChange={(e) => setServerInput(e.target.value)}
+                        placeholder="Bỏ trống nếu dùng Mã Kết Nối 6 ký tự..."
+                        className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                        <Smartphone className="h-3 w-3 text-indigo-400" />
+                        Tên thiết bị này
+                      </label>
+                      <input
+                        type="text"
+                        value={device}
+                        onChange={(e) => setDevice(e.target.value)}
+                        placeholder="VD: iPhone / Samsung của tôi"
+                        className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-
-              <div>
-                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <Smartphone className="h-3.5 w-3.5 text-indigo-400" />
-                  Tên thiết bị này
-                </label>
-                <input
-                  type="text"
-                  value={device}
-                  onChange={(e) => setDevice(e.target.value)}
-                  placeholder="VD: iPhone / Samsung của tôi"
-                  className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-base text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-slate-700 dark:bg-[#090d16] dark:text-white"
-                />
-              </div>
-
-              {displayError && (
-                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-300">
-                  {displayError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-110 disabled:opacity-50"
-              >
-                <Sparkles className="h-4 w-4" />
-                {submitting ? 'Đang kết nối...' : 'Kết nối tới PC'}
-              </button>
 
               <div className="relative flex items-center py-1">
                 <div className="flex-grow border-t border-slate-200 dark:border-slate-700/80" />

@@ -55,6 +55,9 @@ class PairInfoResponse(BaseModel):
     preferred_url: str
     pair_url: str
     pin: str
+    quick_code: str = ""
+    quick_short_url: str | None = None
+    quick_relay_synced: bool = False
     qr_svg_data_url: str
 
 

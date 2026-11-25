@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import socket
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -22,6 +23,7 @@ from ..models import (
 )
 from ..services.auth_service import AuthService, extract_token_from_request, require_auth
 from ..services.google_auth_service import GoogleAuthService
+from ..services.quick_connect_service import format_quick_code
 from ..utils import generate_qr_svg_data_url, get_lan_ip, get_tailscale_ip
 from .google_auth import _resolve_oauth_redirect_uri
 
@@ -43,6 +45,10 @@ def _build_pair_info(request: Request) -> PairInfoResponse:
     pair_token = settings.get_pair_token()
     pair_url = f"{preferred_url}/?pair={pair_token}"
     pin = settings.get_pin()
+    quick_code = format_quick_code(settings.get_quick_code())
+    quick_svc = getattr(request.app.state, "quick_connect_service", None)
+    quick_short_url = quick_svc.short_pair_url if quick_svc else None
+    quick_synced = bool(quick_svc and quick_svc.relay_synced)
     qr_svg_data_url = generate_qr_svg_data_url(pair_url)
 
     return PairInfoResponse(
@@ -53,8 +59,17 @@ def _build_pair_info(request: Request) -> PairInfoResponse:
         preferred_url=preferred_url,
         pair_url=pair_url,
         pin=pin,
+        quick_code=quick_code,
+        quick_short_url=quick_short_url,
+        quick_relay_synced=quick_synced,
         qr_svg_data_url=qr_svg_data_url,
     )
+
+
+@router.get("/ping")
+async def auth_ping() -> dict[str, str]:
+    """Fast public ping used by mobile Quick Connect to pick the fastest reachable PC URL."""
+    return {"app": "antigravity-pulse", "hostname": socket.gethostname()}
 
 
 @router.get("/status", response_model=AuthStatusResponse)
@@ -98,6 +113,20 @@ async def rotate_pair(
 ) -> PairInfoResponse:
     settings = request.app.state.settings_service
     settings.rotate_pair(body.pin if body else None)
+    quick_svc = getattr(request.app.state, "quick_connect_service", None)
+    if quick_svc is not None:
+        await quick_svc.publish_now(force=True)
+    return _build_pair_info(request)
+
+
+@router.post("/quick-sync", response_model=PairInfoResponse)
+async def sync_quick_connect(
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> PairInfoResponse:
+    quick_svc = getattr(request.app.state, "quick_connect_service", None)
+    if quick_svc is not None:
+        await quick_svc.publish_now(force=True)
     return _build_pair_info(request)
 
 

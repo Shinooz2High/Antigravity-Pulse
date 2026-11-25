@@ -15,6 +15,7 @@ from ..utils import atomic_write_json, read_json_file
 DEFAULT_MODEL = "gemini-3.8-flash-high"
 VALID_TUNNEL_MODES = {"cloudflare_quick", "serveo_ssh", "cloudflare_named"}
 VALID_AUTH_SOURCES = {"auto", "agy_account", "google_oauth", "api_key", "vertex_adc"}
+QUICK_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 
 class SettingsService:
@@ -33,6 +34,9 @@ class SettingsService:
 
     def _generate_pair_token(self) -> str:
         return secrets.token_hex(16)  # 32 hex chars
+
+    def _generate_quick_code(self) -> str:
+        return "".join(secrets.choice(QUICK_CODE_ALPHABET) for _ in range(6))
 
     def _load_or_init(self) -> None:
         with self._lock:
@@ -55,6 +59,10 @@ class SettingsService:
 
             if not stored.get("pair_token") or len(str(stored.get("pair_token"))) < 16:
                 stored["pair_token"] = self._generate_pair_token()
+                changed = True
+
+            if not stored.get("quick_code") or len(str(stored.get("quick_code"))) < 6:
+                stored["quick_code"] = self._generate_quick_code()
                 changed = True
 
             if "gemini_api_key" not in stored:
@@ -162,9 +170,19 @@ class SettingsService:
         with self._lock:
             return str(self._data["pair_token"])
 
+    def get_quick_code(self) -> str:
+        with self._lock:
+            val = str(self._data.get("quick_code") or "").strip().upper()
+            if len(val) < 6:
+                val = self._generate_quick_code()
+                self._data["quick_code"] = val
+                self._save()
+            return val
+
     def rotate_pair(self, new_pin: str | None = None) -> tuple[str, str]:
         with self._lock:
             self._data["pair_token"] = self._generate_pair_token()
+            self._data["quick_code"] = self._generate_quick_code()
             if new_pin is not None and new_pin.strip():
                 self._data["pin"] = new_pin.strip()
             self._save()

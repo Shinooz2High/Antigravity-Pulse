@@ -20,6 +20,7 @@ from .services.file_watcher import FileWatcherService
 from .services.google_auth_service import GoogleAuthService
 from .services.models_service import ModelsService
 from .services.project_service import ProjectService
+from .services.quick_connect_service import QuickConnectService
 from .services.runner_service import RunnerService
 from .services.settings_service import SettingsService
 from .services.tunnel_service import TunnelService
@@ -57,6 +58,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     project_service = ProjectService(cfg, settings_service)
     brain_scanner = BrainScanner(settings_service)
     tunnel_service = TunnelService(cfg.agy_port, ws_manager, settings_service)
+    quick_connect_service = QuickConnectService(cfg.agy_port, settings_service, tunnel_service, ws_manager)
     runner_service = RunnerService(
         cfg,
         settings_service,
@@ -73,12 +75,14 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
         probe_task: asyncio.Task[Any] | None = None
         if start_watcher:
             probe_task = asyncio.create_task(google_auth_service.probe_agy_session(force=False))
+            quick_connect_service.start_background_sync()
             file_watcher.start()
         try:
             yield
         finally:
             if probe_task is not None and not probe_task.done():
                 probe_task.cancel()
+            quick_connect_service.stop_background_sync()
             file_watcher.stop()
             await runner_service.stop()
             await tunnel_service.stop()
@@ -99,6 +103,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     app.state.project_service = project_service
     app.state.brain_scanner = brain_scanner
     app.state.tunnel_service = tunnel_service
+    app.state.quick_connect_service = quick_connect_service
     app.state.runner_service = runner_service
     app.state.file_watcher = file_watcher
 
