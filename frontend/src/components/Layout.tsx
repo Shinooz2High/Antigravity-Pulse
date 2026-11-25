@@ -74,6 +74,12 @@ export interface LayoutProps {
   projects?: Project[];
   selectedProjectId?: string;
   onSelectProject?: (projectId: string) => void;
+  onCreateProject?: (input: {
+    name: string;
+    path: string;
+    description?: string;
+  }) => Promise<void>;
+  onDeleteProject?: (projectId: string) => Promise<void> | void;
   runs?: PromptRun[];
   selectedRunId?: string | null;
   conversations?: ConversationThread[];
@@ -100,6 +106,8 @@ export function Layout({
   projects = [],
   selectedProjectId = '',
   onSelectProject,
+  onCreateProject,
+  onDeleteProject,
   runs = [],
   selectedRunId = null,
   conversations = [],
@@ -122,12 +130,22 @@ export function Layout({
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false);
+  const [newProjName, setNewProjName] = useState('');
+  const [newProjPath, setNewProjPath] = useState('');
+  const [newProjDesc, setNewProjDesc] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [createProjectError, setCreateProjectError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
+    kind: 'conversation' | 'project';
     id: string;
     title: string;
     token: number;
   } | null>(null);
-  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoringItem, setRestoringItem] = useState<{
+    kind: 'conversation' | 'project';
+    id: string;
+  } | null>(null);
   const [fileTreeNodes, setFileTreeNodes] = useState<FileTreeNode[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loadingRootTree, setLoadingRootTree] = useState(false);
@@ -705,32 +723,98 @@ export function Layout({
               <div>
                 <div className="flex items-center justify-between px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <span>Projects</span>
-                  <span className="text-[9px] text-slate-500 font-mono">{projects.length}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] text-slate-500 font-mono">{projects.length}</span>
+                    {onCreateProject && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreateProjectError(null);
+                          setCreateProjectModalOpen(true);
+                          closeSidebarOnMobile();
+                        }}
+                        className="flex h-4 w-4 items-center justify-center rounded bg-white/10 text-slate-300 transition hover:bg-cyan-500/25 hover:text-cyan-300"
+                        title="Thêm dự án mới"
+                        aria-label="Thêm dự án mới"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-0.5">
-                  {projects.map((proj) => (
-                    <button
-                      key={proj.id}
-                      type="button"
-                      onClick={() => {
-                        if (onSelectProject) onSelectProject(proj.id);
-                        onTabChange('projects');
-                        closeSidebarOnMobile();
-                      }}
-                      className={cn(
-                        'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition',
-                        proj.id === selectedProjectId
-                          ? 'bg-cyan-500/15 text-cyan-300 font-semibold'
-                          : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
-                      )}
-                    >
-                      <span className="flex items-center gap-2 truncate">
-                        <FolderGit2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                        <span className="truncate">{proj.name}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                <ul className="space-y-0.5 m-0 p-0 list-none" aria-label="Projects">
+                  {projects.length === 0 ? (
+                    <li className="px-2.5 py-2 text-[11px] text-slate-500 italic">
+                      Chưa có dự án nào
+                    </li>
+                  ) : (
+                    projects.map((proj) => {
+                      const isGone =
+                        pendingDelete?.kind === 'project' && pendingDelete.id === proj.id;
+                      const isBack =
+                        restoringItem?.kind === 'project' && restoringItem.id === proj.id;
+
+                      return (
+                        <li
+                          key={proj.id}
+                          className={cn(
+                            'u470-r',
+                            isGone && 'is-gone',
+                            isBack && 'is-back'
+                          )}
+                        >
+                          <div>
+                            <div
+                              className={cn(
+                                'u470-in group px-1.5 py-1 text-xs transition',
+                                proj.id === selectedProjectId
+                                  ? 'bg-cyan-500/15 text-cyan-300 font-semibold'
+                                  : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onSelectProject) onSelectProject(proj.id);
+                                  onTabChange('projects');
+                                  closeSidebarOnMobile();
+                                }}
+                                className="flex min-w-0 flex-1 items-center gap-2 py-0.5 pl-1 text-left"
+                              >
+                                <FolderGit2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                <span className="truncate">{proj.name}</span>
+                              </button>
+
+                              {onDeleteProject && (
+                                <TrashLidButton
+                                  label={`Xóa dự án "${proj.name}"`}
+                                  className="opacity-65 group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (pendingDelete) {
+                                      if (pendingDelete.kind === 'conversation') {
+                                        onDeleteConversation?.(pendingDelete.id);
+                                      } else if (pendingDelete.id !== proj.id) {
+                                        onDeleteProject(pendingDelete.id);
+                                      }
+                                    }
+                                    setRestoringItem(null);
+                                    setPendingDelete({
+                                      kind: 'project',
+                                      id: proj.id,
+                                      title: proj.name,
+                                      token: Date.now(),
+                                    });
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
               </div>
 
               {/* SECTION: RECENTS (Recent Conversations) */}
@@ -751,6 +835,15 @@ export function Layout({
                     <span className="text-[9px] text-slate-500 font-mono">
                       {conversations.length}
                     </span>
+                    <button
+                      type="button"
+                      onClick={handleStartNewConversation}
+                      className="flex h-4 w-4 items-center justify-center rounded bg-white/10 text-slate-300 transition hover:bg-cyan-500/25 hover:text-cyan-300"
+                      title="Tạo cuộc trò chuyện mới"
+                      aria-label="Tạo cuộc trò chuyện mới"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
                   </div>
                 </div>
                 <ul className="space-y-0.5 m-0 p-0 list-none" aria-label="Recent Conversations">
@@ -762,8 +855,10 @@ export function Layout({
                     conversations.slice(0, 15).map((conv) => {
                       const isSelected =
                         conv.id === selectedConversationId && activeTab === 'prompt';
-                      const isGone = pendingDelete?.id === conv.id;
-                      const isBack = restoringId === conv.id;
+                      const isGone =
+                        pendingDelete?.kind === 'conversation' && pendingDelete.id === conv.id;
+                      const isBack =
+                        restoringItem?.kind === 'conversation' && restoringItem.id === conv.id;
                       const statusDot =
                         conv.status === 'completed'
                           ? 'bg-emerald-400'
@@ -825,11 +920,16 @@ export function Layout({
                                   className="opacity-65 group-hover:opacity-100"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (pendingDelete && pendingDelete.id !== conv.id) {
-                                      onDeleteConversation(pendingDelete.id);
+                                    if (pendingDelete) {
+                                      if (pendingDelete.kind === 'project') {
+                                        onDeleteProject?.(pendingDelete.id);
+                                      } else if (pendingDelete.id !== conv.id) {
+                                        onDeleteConversation(pendingDelete.id);
+                                      }
                                     }
-                                    setRestoringId(null);
+                                    setRestoringItem(null);
                                     setPendingDelete({
+                                      kind: 'conversation',
                                       id: conv.id,
                                       title: conv.title,
                                       token: Date.now(),
@@ -1095,6 +1195,133 @@ export function Layout({
       {isThemeModalOpen && <CustomThemeModal />}
 
       {/* ============================================================== */}
+      {/* QUICK ADD PROJECT MODAL (Triggered by (+) next to Projects)    */}
+      {/* ============================================================== */}
+      {createProjectModalOpen && onCreateProject && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-md"
+          onClick={() => !creatingProject && setCreateProjectModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-white/15 bg-[#0e1324]/95 p-5 shadow-2xl backdrop-blur-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="h-4 w-4 text-cyan-400" />
+                <h3 className="text-sm font-bold text-white">Thêm dự án mới</h3>
+              </div>
+              <button
+                type="button"
+                disabled={creatingProject}
+                onClick={() => setCreateProjectModalOpen(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
+                aria-label="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              className="space-y-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const name = newProjName.trim();
+                const path = newProjPath.trim();
+                if (!name || !path) {
+                  setCreateProjectError('Vui lòng nhập đầy đủ Tên dự án và Đường dẫn thư mục trên PC.');
+                  return;
+                }
+                setCreatingProject(true);
+                setCreateProjectError(null);
+                try {
+                  await onCreateProject({
+                    name,
+                    path,
+                    description: newProjDesc.trim() || undefined,
+                  });
+                  setNewProjName('');
+                  setNewProjPath('');
+                  setNewProjDesc('');
+                  setCreateProjectModalOpen(false);
+                } catch (err) {
+                  setCreateProjectError(
+                    err instanceof Error ? err.message : 'Không thể tạo dự án mới.'
+                  );
+                } finally {
+                  setCreatingProject(false);
+                }
+              }}
+            >
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-300">
+                  Tên dự án
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={newProjName}
+                  onChange={(e) => setNewProjName(e.target.value)}
+                  placeholder="Ví dụ: My NextJS App"
+                  className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/60"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-300">
+                  Đường dẫn thư mục trên PC
+                </label>
+                <input
+                  type="text"
+                  value={newProjPath}
+                  onChange={(e) => setNewProjPath(e.target.value)}
+                  placeholder="Ví dụ: D:\Projects\my-app hoặc ~/projects/my-app"
+                  className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/60"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-300">
+                  Mô tả ngắn (tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={newProjDesc}
+                  onChange={(e) => setNewProjDesc(e.target.value)}
+                  placeholder="Ghi chú về dự án..."
+                  className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400/60"
+                />
+              </div>
+
+              {createProjectError && (
+                <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300">
+                  {createProjectError}
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={creatingProject}
+                  onClick={() => setCreateProjectModalOpen(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingProject}
+                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-4 py-2 text-xs font-bold text-white shadow-lg transition hover:brightness-110 disabled:opacity-60"
+                >
+                  {creatingProject ? 'Đang tạo...' : 'Tạo dự án'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* LUCIAN #470 FLOATING 5s COUNTDOWN RING UNDO PILL               */}
       {/* ============================================================== */}
       <UndoCountdownPill
@@ -1103,18 +1330,24 @@ export function Layout({
         resetKey={pendingDelete?.token ?? 0}
         onUndo={() => {
           if (!pendingDelete) return;
-          const restoredId = pendingDelete.id;
+          const restored = { kind: pendingDelete.kind, id: pendingDelete.id };
           setPendingDelete(null);
-          setRestoringId(restoredId);
+          setRestoringItem(restored);
           window.setTimeout(() => {
-            setRestoringId((cur) => (cur === restoredId ? null : cur));
+            setRestoringItem((cur) =>
+              cur && cur.kind === restored.kind && cur.id === restored.id ? null : cur
+            );
           }, 800);
         }}
         onExpire={() => {
           if (!pendingDelete) return;
-          const idToCommit = pendingDelete.id;
+          const target = pendingDelete;
           setPendingDelete(null);
-          onDeleteConversation?.(idToCommit);
+          if (target.kind === 'conversation') {
+            onDeleteConversation?.(target.id);
+          } else {
+            onDeleteProject?.(target.id);
+          }
         }}
       />
     </div>

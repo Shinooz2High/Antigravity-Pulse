@@ -938,6 +938,32 @@ export default function App() {
     [conversations, selectedConversationId]
   );
 
+  const handleCreateProjectFromSidebar = useCallback(
+    async (input: { name: string; path: string; description?: string }) => {
+      const created = await api.createProject(input);
+      await refreshProjects();
+      setSelectedProjectId(created.id);
+      notify(`Đã thêm dự án "${created.name}"`, 'success');
+    },
+    [refreshProjects, notify]
+  );
+
+  const handleDeleteProjectFromSidebar = useCallback(
+    async (projectId: string) => {
+      try {
+        await api.deleteProject(projectId);
+        await refreshProjects();
+        notify('Đã xóa dự án khỏi danh sách', 'info');
+      } catch (err) {
+        notify(
+          err instanceof Error ? err.message : 'Không thể xóa dự án',
+          'error'
+        );
+      }
+    },
+    [refreshProjects, notify]
+  );
+
   if (booting) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#090d16] text-slate-200">
@@ -978,6 +1004,8 @@ export default function App() {
         projects={projects}
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
+        onCreateProject={handleCreateProjectFromSidebar}
+        onDeleteProject={handleDeleteProjectFromSidebar}
         runs={runs}
         selectedRunId={selectedRunId}
         conversations={conversations}
