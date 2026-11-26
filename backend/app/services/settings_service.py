@@ -13,6 +13,7 @@ from ..models import AuthSource, EngineMode, ExecutionPolicy, SystemSettingsResp
 from ..utils import atomic_write_json, read_json_file
 
 DEFAULT_MODEL = "gemini-3.8-flash-high"
+VALID_ENGINE_MODES = {"antigravity_sdk", "cli", "claude_code", "codex", "opencode", "demo"}
 VALID_TUNNEL_MODES = {"cloudflare_quick", "serveo_ssh", "cloudflare_named"}
 VALID_AUTH_SOURCES = {"auto", "agy_account", "google_oauth", "api_key", "vertex_adc"}
 QUICK_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -89,7 +90,7 @@ class SettingsService:
                 stored["vertex_location"] = self.config.google_cloud_location or "us-central1"
                 changed = True
 
-            if stored.get("default_engine_mode") not in {"antigravity_sdk", "cli", "demo"}:
+            if stored.get("default_engine_mode") not in VALID_ENGINE_MODES:
                 stored["default_engine_mode"] = "antigravity_sdk"
                 changed = True
 
@@ -347,7 +348,7 @@ class SettingsService:
                 self._data["vertex_project"] = req.vertex_project.strip() or None
             if req.vertex_location is not None and req.vertex_location.strip():
                 self._data["vertex_location"] = req.vertex_location.strip()
-            if req.default_engine_mode is not None:
+            if req.default_engine_mode is not None and req.default_engine_mode in VALID_ENGINE_MODES:
                 self._data["default_engine_mode"] = req.default_engine_mode
             if req.default_execution_policy is not None:
                 self._data["default_execution_policy"] = req.default_execution_policy

@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from ..models import (
+    AgentCliInfo,
     DiscordRpcStatusResponse,
     MobileBuildInfo,
     ModelListResponse,
@@ -30,9 +31,76 @@ from ..models import (
 )
 from ..services.auth_service import require_auth
 from ..services.models_service import ModelsService
+from ..services.runner_service import find_cli_binary
 from ..utils import get_lan_ip, get_tailscale_ip
 
 router = APIRouter(prefix="/api/system", tags=["system"])
+
+_CLI_VERSION_CACHE: dict[tuple[str, str], tuple[float, str | None]] = {}
+_CLI_PROBE_SPECS: list[tuple[str, str, str]] = [
+    ("agy", "Antigravity CLI (agy)", "agy"),
+    ("claude_code", "Claude Code", "claude"),
+    ("codex", "OpenAI Codex", "codex"),
+    ("opencode", "OpenCode", "opencode"),
+]
+
+
+def _probe_cli_version_sync(command: str, bin_path: str) -> str | None:
+    import subprocess
+
+    now = time.monotonic()
+    cache_key = (command, bin_path)
+    cached = _CLI_VERSION_CACHE.get(cache_key)
+    if cached is not None and (now - cached[0]) < 60.0:
+        return cached[1]
+
+    version: str | None = None
+    try:
+        argv = (
+            ["cmd.exe", "/c", bin_path, "--version"]
+            if os.name == "nt" and bin_path.lower().endswith((".cmd", ".bat"))
+            else [bin_path, "--version"]
+        )
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=1.5,
+            check=False,
+        )
+        raw = (proc.stdout or proc.stderr or "").strip()
+        if raw:
+            version = raw.splitlines()[0].strip()[:80]
+    except Exception:
+        version = None
+
+    _CLI_VERSION_CACHE[cache_key] = (now, version)
+    return version
+
+
+async def probe_installed_agents() -> list[AgentCliInfo]:
+    import asyncio
+
+    async def _probe_one(agent_id: str, name: str, command: str) -> AgentCliInfo:
+        bin_path = find_cli_binary(command)
+        if not bin_path:
+            return AgentCliInfo(
+                id=agent_id,
+                name=name,
+                installed=False,
+                version=None,
+                command=command,
+            )
+        version = await asyncio.to_thread(_probe_cli_version_sync, command, bin_path)
+        return AgentCliInfo(
+            id=agent_id,
+            name=name,
+            installed=True,
+            version=version,
+            command=command,
+        )
+
+    return list(await asyncio.gather(*(_probe_one(aid, name, cmd) for aid, name, cmd in _CLI_PROBE_SPECS)))
 
 
 def get_sdk_info() -> tuple[bool, str | None]:
@@ -65,10 +133,8 @@ async def system_status(
     vertex_configured = bool(vertex_enabled and vertex_project)
     google_auth = getattr(request.app.state, "google_auth_service", None)
     google_oauth_ok = bool(google_auth and google_auth.has_google_oauth_session())
-    agy_cli_present = (
-        shutil.which("agy") is not None
-        or (Path.home() / ".gemini" / "bin" / ("agy.exe" if os.name == "nt" else "agy")).exists()
-    )
+    installed_agents = await probe_installed_agents()
+    agy_cli_present = any(a.command == "agy" and a.installed for a in installed_agents)
     sdk_configured = bool(
         (sdk_installed and (api_key_configured or vertex_configured or google_oauth_ok))
         or (agy_cli_present and settings.get_auth_source() in ("auto", "agy_account"))
@@ -103,6 +169,7 @@ async def system_status(
         tunnel_short_url=tunnel.tunnel_short_url,
         connected_clients=ws_manager.connected_count(),
         uptime_seconds=round(max(0.0, time.monotonic() - start_time), 1),
+        installed_agents=installed_agents,
     )
 
 

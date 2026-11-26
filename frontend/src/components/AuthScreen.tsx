@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Activity,
   Camera,
   ChevronDown,
   ClipboardPaste,
@@ -10,7 +9,6 @@ import {
   Globe,
   HelpCircle,
   KeyRound,
-  QrCode,
   Smartphone,
   Sparkles,
   Upload,

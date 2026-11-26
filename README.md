@@ -64,17 +64,25 @@ Xem hướng dẫn chi tiết từng nền tảng tại **[install/README.md](in
    - Mã kết nối nhanh 6 ký tự mã hóa đầu cuối + link gọn `https://agypulse.dpdns.org/?c=...` tự động giải mã địa chỉ PC và đăng nhập 1 chạm.
 2. **Đăng nhập Google & Antigravity CLI (`agy`)**
    - Hỗ trợ nút **Continue with Google** ở màn hình đăng nhập, Google OAuth 2.0, ADC và đồng bộ phiên `agy` cục bộ.
-3. **Chạy Prompt từ điện thoại & Duyệt Tool trực tiếp (Mobile Prompt Studio)**
+3. **AI Chat Studio v2 & Multi-Agent Orchestration (Mobile Prompt Studio)**
    - Gửi prompt, đính kèm ảnh/file tới workspace PC; chọn model AI & xem trạng thái quota.
-   - 3 chế độ thực thi: `Antigravity SDK`, `CLI Runner (agy)`, `Demo Simulator`.
+   - **6 chế độ Agent/Engine**: `Antigravity SDK`, `Antigravity CLI (agy)`, `Claude Code CLI`, `OpenAI Codex CLI`, `OpenCode CLI`, và `Demo Simulator` (tự động phát hiện CLI đã cài qua `/api/system/status`).
+   - **Slash Commands (`/`) & Custom Commands**: Gõ `/` để mở bảng lệnh nhanh (`/review`, `/diff`, `/fix`, `/test`, `/explain`, `/architecture`, `/remember`) và tự tạo lệnh `/` riêng.
+   - **Hàng đợi tin nhắn (Queued Next-Turn)**, **Nhập liệu giọng nói & Đọc to TTS (SpeechRecognition / SpeechSynthesis)**, **Bộ nhớ AI dài hạn (`memories.json`)**, và **Xuất hội thoại** ra `.md` / `.html`.
    - 3 chính sách an toàn: `Hỏi duyệt trên ĐT (ask_mobile)`, `Chỉ đọc (read_only)`, `Tự động trong workspace (auto_workspace)`.
    - Stream suy nghĩ (`thoughts`), nội dung trả lời và lời gọi tool real-time qua WebSocket.
-4. **Theo dõi Phiên Antigravity trên PC (Local Brain Monitor)**
+4. **Pocket IDE v2 (Code Editor, Git Source Control, Checkpoints, Terminal & Live Ports)**
+   - **Trình soạn thảo Code di động**: Tạo file/thư mục, đổi tên, xóa, tìm trong file (`Ctrl+F`), lưu `Ctrl+S` kèm phát hiện xung đột `409 Conflict`, xem ảnh/file nhị phân và **Gửi ngữ cảnh sang AI Chat**.
+   - **Git Source Control**: Xem nhánh hiện tại (`ahead`/`behind`), Staged/Unstaged/Untracked, Unified Diff tô màu, Stage/Unstage/Discard, Commit, Pull/Push và lịch sử Commit.
+   - **Workspace Checkpoints & Safe Restore**: Tự động chụp snapshot (`auto`) trước mỗi tác vụ sửa code, chụp thủ công (`manual`), xem trước thay đổi (`modified`/`recreated`/`deleted`) và khôi phục an toàn (tự tạo checkpoint `undo` trước khi restore).
+   - **Terminal đa phiên & Live Dev Ports**: Chạy lệnh shell PowerShell/Bash từ xa theo từng dự án với bàn phím ảo di động (`Ctrl+C`, `Clear`, `git status`, `pytest`...), quét cổng dev server đang chạy (`3000`, `5173`, `8000`, `8765`...) và xem trước iframe Mobile/Desktop.
+   - **Ghi chú & Checklist công việc (Notes)**: Tạo ghi chú ghim và danh sách việc cần làm theo từng dự án.
+5. **Theo dõi Phiên Antigravity trên PC (Local Brain Monitor)**
    - Đọc trực tiếp `~/.gemini/antigravity/brain/*` (tiêu đề, token usage, suy nghĩ, tool calls, transcript đầy đủ) và tự đẩy cập nhật real-time qua `watchdog`.
-5. **Kho Kết quả & Trình duyệt Workspace (Artifacts & File Browser)**
+6. **Kho Kết quả & Trình duyệt Workspace (Artifacts & File Browser)**
    - Xem báo cáo Markdown (GFM, KaTeX, Mermaid, code highlight), phóng to ảnh, xem PDF/HTML và tải về trực tiếp.
    - Duyệt thư mục dự án PC an toàn (chống path traversal) kèm trạng thái Git branch/dirty.
-6. **Giao diện Tùy biến & Capacitor Native (Android / iOS)**
+7. **Giao diện Tùy biến & Capacitor Native (Android / iOS)**
    - Live Wallpaper, Boot Intro Overlay, Custom Theme, Haptics, StatusBar, LocalNotifications và Share sheet native.
 
 ---
@@ -83,20 +91,20 @@ Xem hướng dẫn chi tiết từng nền tảng tại **[install/README.md](in
 
 ```text
 .
-├── backend/                     # FastAPI server, Antigravity runner, brain scanner, quick connect & tests
+├── backend/                     # FastAPI server, Antigravity runner, brain scanner, Pocket IDE & tests
 │   ├── app/
-│   │   ├── routers/             # auth, google_auth, prompts, antigravity, projects, system, ws
-│   │   └── services/            # runner, brain_scanner, quick_connect, google_auth, tunnel, file_watcher...
+│   │   ├── routers/             # auth, google_auth, prompts, antigravity, projects, ide, workspace_tools, system, ws
+│   │   └── services/            # runner, git_service, checkpoint_service, terminal_service, memory_service, tunnel...
 │   ├── tests/                   # Bộ kiểm thử tự động pytest
 │   └── requirements.txt
 ├── frontend/                    # React 19 + TypeScript + Vite + Tailwind CSS v4 + Capacitor 8
 │   ├── public/                  # PWA manifest, sw.js, icons, install.ps1, cai-antigravity-pulse.bat, _redirects
 │   └── src/
-│       ├── components/          # AuthScreen, GoogleAgyAuthSection, MarkdownRenderer, library/, theme/
+│       ├── components/          # AuthScreen, GoogleAgyAuthSection, MarkdownRenderer, ide/, library/, theme/
 │       ├── contexts/            # CustomThemeContext
 │       ├── hooks/               # usePulseSocket
-│       ├── lib/                 # api, quickConnect, native (Capacitor), utils
-│       └── pages/               # Dashboard, Prompt, Outputs, Projects, Settings
+│       ├── lib/                 # api, ideApi, quickConnect, native (Capacitor), utils
+│       └── pages/               # Dashboard, Prompt, Outputs, Projects (Pocket IDE), Settings
 ├── install/                     # Bộ cài đặt offline PC & hướng dẫn cài đặt Android / iOS
 ├── .github/workflows/           # GitHub Actions tự động build Android APK & iOS Xcode project
 ├── start.bat / start.ps1        # Script khởi chạy nhanh trên Windows

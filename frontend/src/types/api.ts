@@ -1,4 +1,10 @@
-export type EngineMode = 'antigravity_sdk' | 'cli' | 'demo';
+export type EngineMode =
+  | 'antigravity_sdk'
+  | 'cli'
+  | 'claude_code'
+  | 'codex'
+  | 'opencode'
+  | 'demo';
 export type ExecutionPolicy = 'read_only' | 'ask_mobile' | 'auto_workspace';
 export type AuthSource = 'auto' | 'agy_account' | 'google_oauth' | 'api_key' | 'vertex_adc';
 export type TunnelMode = 'cloudflare_quick' | 'serveo_ssh' | 'cloudflare_named';
@@ -216,6 +222,24 @@ export interface PendingApproval {
   created_at: string;
 }
 
+export interface AgentCliInfo {
+  id: string;
+  name: string;
+  installed: boolean;
+  version?: string | null;
+  command: string;
+}
+
+export interface AgentMemoryItem {
+  id: string;
+  title: string;
+  content: string;
+  scope: 'global' | 'project';
+  project_id?: string | null;
+  mode: 'always' | 'passive';
+  updated_at: string;
+}
+
 export interface SystemStatus {
   hostname: string;
   os: string;
@@ -226,6 +250,7 @@ export interface SystemStatus {
   api_key_configured: boolean;
   vertex_configured: boolean;
   agy_cli_found: boolean;
+  installed_agents?: AgentCliInfo[];
   brain_dir: string;
   brain_session_count: number;
   lan_ip: string;

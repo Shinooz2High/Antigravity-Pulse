@@ -1,39 +1,25 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Activity,
-  Bot,
-  Brain,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Code2,
-  Command,
   Download,
-  FileCode,
   FolderGit2,
   FolderPlus,
-  HelpCircle,
-  Home,
-  Layers,
-  Maximize2,
   Menu,
   Minus,
-  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   Plus,
-  RefreshCw,
   Search,
   Settings,
   Sparkles,
   Square,
-  TerminalSquare,
-  Wifi,
-  WifiOff,
   X,
   Zap,
 } from 'lucide-react';
@@ -41,6 +27,7 @@ import type { WsStatus } from '../hooks/usePulseSocket';
 import { cn, formatRelativeTime } from '../lib/utils';
 import type {
   ArtifactModalTarget,
+  FileEntry,
   Project,
   PromptRun,
   SystemStatus,
@@ -99,9 +86,7 @@ export function Layout({
   wsStatus,
   onReconnectWs,
   systemStatus,
-  pendingApprovalCount,
   activeRunCount,
-  isDark,
   onToggleTheme,
   projects = [],
   selectedProjectId = '',
@@ -109,7 +94,6 @@ export function Layout({
   onCreateProject,
   onDeleteProject,
   runs = [],
-  selectedRunId = null,
   conversations = [],
   selectedConversationId = null,
   onSelectConversation,
@@ -147,6 +131,7 @@ export function Layout({
     id: string;
   } | null>(null);
   const [fileTreeNodes, setFileTreeNodes] = useState<FileTreeNode[]>([]);
+  const [fileEntryMap, setFileEntryMap] = useState<Record<string, FileEntry>>({});
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loadingRootTree, setLoadingRootTree] = useState(false);
 
@@ -168,7 +153,13 @@ export function Layout({
       .getProjectFiles(selectedProject.id, '')
       .then((res) => {
         if (cancelled) return;
-        const nodes: FileTreeNode[] = (res.entries || []).map((entry) => ({
+        const entries = res.entries || [];
+        const nextMap: Record<string, FileEntry> = {};
+        for (const entry of entries) {
+          nextMap[entry.rel_path] = entry;
+        }
+        setFileEntryMap(nextMap);
+        const nodes: FileTreeNode[] = entries.map((entry) => ({
           path: entry.rel_path,
           name: entry.name,
           isDir: entry.is_dir,
@@ -192,7 +183,15 @@ export function Layout({
     if (!selectedProject?.id) return;
     try {
       const res = await api.getProjectFiles(selectedProject.id, folderNode.path);
-      const children: FileTreeNode[] = (res.entries || []).map((entry) => ({
+      const entries = res.entries || [];
+      setFileEntryMap((prev) => {
+        const next = { ...prev };
+        for (const entry of entries) {
+          next[entry.rel_path] = entry;
+        }
+        return next;
+      });
+      const children: FileTreeNode[] = entries.map((entry) => ({
         path: entry.rel_path,
         name: entry.name,
         isDir: entry.is_dir,
@@ -1077,7 +1076,7 @@ export function Layout({
                     </button>
                   </div>
                   <p className="font-mono text-[10px] text-slate-500 break-all">
-                    {selectedProject?.root_path}
+                    {selectedProject?.path}
                   </p>
                   {loadingRootTree ? (
                     <p className="py-4 text-center text-[11px] text-slate-400">
@@ -1091,12 +1090,20 @@ export function Layout({
                       onSelectFile={(node) => {
                         setSelectedFilePath(node.path);
                         if (selectedProject && onOpenArtifact) {
+                          const entry: FileEntry = fileEntryMap[node.path] || {
+                            name: node.name,
+                            rel_path: node.path,
+                            is_dir: false,
+                            size: 0,
+                            modified_at: '',
+                            category: 'other',
+                            mime_type: 'application/octet-stream',
+                          };
                           onOpenArtifact({
                             kind: 'project_file',
                             projectId: selectedProject.id,
                             projectName: selectedProject.name,
-                            relPath: node.path,
-                            name: node.name,
+                            entry,
                           });
                         }
                       }}
@@ -1112,7 +1119,7 @@ export function Layout({
                       <span className="text-slate-500">Host:</span> {systemStatus?.hostname || 'Antigravity PC'}
                     </div>
                     <div>
-                      <span className="text-slate-500">Platform:</span> {systemStatus?.os_info || 'Windows'}
+                      <span className="text-slate-500">Platform:</span> {systemStatus?.os || 'Windows'}
                     </div>
                     <div>
                       <span className="text-slate-500">LAN IP:</span> {systemStatus?.lan_ip || '127.0.0.1'}

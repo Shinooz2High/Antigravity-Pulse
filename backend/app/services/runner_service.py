@@ -43,6 +43,50 @@ from .ws_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
 
+
+def find_cli_binary(command: str) -> str | None:
+    """Locate an agent CLI binary via PATH and standard user install directories."""
+    found = shutil.which(command)
+    if found:
+        return found
+
+    search_dirs: list[Path] = [
+        Path.home() / ".gemini" / "bin",
+        Path.home() / ".local" / "bin",
+    ]
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            search_dirs.append(Path(appdata) / "npm")
+        search_dirs.extend(
+            [
+                Path.home() / "AppData" / "Roaming" / "npm",
+                Path.home() / ".bun" / "bin",
+                Path.home() / "scoop" / "shims",
+            ]
+        )
+        names = [f"{command}.exe", f"{command}.cmd", f"{command}.bat", command]
+    else:
+        names = [command]
+
+    for directory in search_dirs:
+        if not directory.is_dir():
+            continue
+        for fname in names:
+            candidate = directory / fname
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def _wrap_cli_argv(bin_path: str, args: list[str]) -> list[str]:
+    """Wrap Windows .cmd/.bat shims via cmd.exe /c while flattening newlines safely."""
+    if os.name == "nt" and bin_path.lower().endswith((".cmd", ".bat")):
+        safe_args = [re.sub(r"[\r\n]+", " ", a) for a in args]
+        return ["cmd.exe", "/c", bin_path, *safe_args]
+    return [bin_path, *args]
+
+
 SAFE_READONLY_CLI_PREFIXES = (
     "git status",
     "git log",
@@ -68,12 +112,16 @@ class RunnerService:
         project_service: ProjectService,
         ws_manager: WebSocketManager,
         google_auth_service: Any = None,
+        memory_service: Any = None,
+        checkpoint_service: Any = None,
     ) -> None:
         self.config = config
         self.settings = settings
         self.project_service = project_service
         self.ws_manager = ws_manager
         self.google_auth = google_auth_service
+        self.memory_service = memory_service
+        self.checkpoint_service = checkpoint_service
 
         self.runs_dir = config.data_dir / "runs"
         self.uploads_dir = config.data_dir / "uploads"
@@ -535,11 +583,32 @@ class RunnerService:
         print(f"   Dự án: {project.name} | Engine: {run.engine_mode} | Quyền: {run.execution_policy}", flush=True)
         print("=" * 56, flush=True)
 
+        if (
+            self.checkpoint_service is not None
+            and run.execution_policy != "read_only"
+            and run.engine_mode != "demo"
+        ):
+            try:
+                await asyncio.to_thread(
+                    self.checkpoint_service.create_checkpoint,
+                    run.project_id,
+                    f"Auto: {run.prompt[:40]}",
+                    "auto",
+                )
+            except Exception as exc:
+                logger.debug("Best-effort auto checkpoint failed for %s: %s", run_id, exc)
+
         try:
             if run.engine_mode == "antigravity_sdk":
                 await self._run_antigravity_sdk(run_id, project_path, run_dir)
             elif run.engine_mode == "cli":
                 await self._run_cli(run_id, project_path, run_dir)
+            elif run.engine_mode == "claude_code":
+                await self._run_claude_code(run_id, project_path, run_dir)
+            elif run.engine_mode == "codex":
+                await self._run_codex(run_id, project_path, run_dir)
+            elif run.engine_mode == "opencode":
+                await self._run_opencode(run_id, project_path, run_dir)
             else:
                 await self._run_demo(run_id, project_path, run_dir)
 
@@ -646,8 +715,22 @@ class RunnerService:
                 run.error = error
 
         if status == "completed":
-            self._write_run_report(self.get_run(run_id), run_dir)
-            artifacts = self._index_run_artifacts(self.get_run(run_id), run_dir)
+            completed_run = self.get_run(run_id)
+            if self.memory_service is not None and completed_run.engine_mode != "demo" and completed_run.response_text:
+                try:
+                    saved_mems = self.memory_service.extract_and_save_memory_blocks(
+                        completed_run.project_id,
+                        completed_run.response_text,
+                    )
+                    if saved_mems:
+                        await self.ws_manager.broadcast(
+                            "memory.updated",
+                            {"project_id": completed_run.project_id, "count": len(saved_mems)},
+                        )
+                except Exception as exc:
+                    logger.debug("Memory block extraction skipped: %s", exc)
+            self._write_run_report(completed_run, run_dir)
+            artifacts = self._index_run_artifacts(completed_run, run_dir)
             with self._lock:
                 self._runs[run_id].output_artifacts = artifacts
 
@@ -681,6 +764,37 @@ class RunnerService:
 
     # --- Engine Implementations ---
 
+    def _build_prompt_with_memory(self, run: PromptRun) -> str:
+        base_prompt = run.prompt.strip()
+        if self.memory_service is None or run.engine_mode == "demo":
+            return base_prompt
+        try:
+            prefix = self.memory_service.build_context_prefix(run.project_id, base_prompt)
+        except Exception as exc:
+            logger.debug("Memory prefix build failed: %s", exc)
+            return base_prompt
+        if prefix:
+            return f"{prefix}\n\n{base_prompt}"
+        return base_prompt
+
+    def _format_prompt_with_attachments(self, run: PromptRun) -> str:
+        prompt_body = self._build_prompt_with_memory(run)
+        if run.attachments:
+            att_lines: list[str] = []
+            for att in run.attachments:
+                try:
+                    att_path, _, mime = self.resolve_upload_raw(att.id)
+                    att_lines.append(f"- `{att.name}` ({mime}): `{att_path}`")
+                except Exception:
+                    continue
+            if att_lines:
+                prompt_body = (
+                    f"{prompt_body}\n\n"
+                    "Attached files uploaded from mobile (you can read/inspect these paths directly):\n"
+                    + "\n".join(att_lines)
+                )
+        return prompt_body
+
     async def _run_agy_stream_json(self, run_id: str, project_path: Path, run_dir: Path) -> None:
         """Execute prompt using the official Antigravity CLI (`agy -p --output-format stream-json`),
         leveraging the user's unified Google Antigravity account token in the OS secure keyring.
@@ -702,22 +816,7 @@ class RunnerService:
             resolved_model = self.settings.get_model()
 
         run = self.get_run(run_id)
-        prompt_body = run.prompt.strip()
-
-        if run.attachments:
-            att_lines: list[str] = []
-            for att in run.attachments:
-                try:
-                    att_path, _, mime = self.resolve_upload_raw(att.id)
-                    att_lines.append(f"- `{att.name}` ({mime}): `{att_path}`")
-                except Exception:
-                    continue
-            if att_lines:
-                prompt_body = (
-                    f"{prompt_body}\n\n"
-                    "Attached files uploaded from mobile (you can read/inspect these paths directly):\n"
-                    + "\n".join(att_lines)
-                )
+        prompt_body = self._format_prompt_with_attachments(run)
 
         argv: list[str] = [
             agy_bin,
@@ -994,8 +1093,9 @@ class RunnerService:
 
         agent_config = LocalAgentConfig(**cfg_kwargs)
 
-        # Build multimodal input with uploaded attachments
-        prompt_parts: list[Any] = [run.prompt]
+        # Build multimodal input with memory context & uploaded attachments
+        effective_prompt = self._build_prompt_with_memory(run)
+        prompt_parts: list[Any] = [effective_prompt]
         extra_notes: list[str] = []
         for att in run.attachments:
             try:
@@ -1010,7 +1110,7 @@ class RunnerService:
                 continue
 
         if extra_notes:
-            prompt_parts[0] = f"{run.prompt}\n\nAttached files:\n" + "\n".join(extra_notes)
+            prompt_parts[0] = f"{effective_prompt}\n\nAttached files:\n" + "\n".join(extra_notes)
 
         chat_input: Any = prompt_parts if len(prompt_parts) > 1 else prompt_parts[0]
 
@@ -1167,6 +1267,275 @@ class RunnerService:
         )
         if rc != 0 and run_id not in self._cancelled_runs:
             raise RuntimeError(f"CLI command exited with code {rc}")
+
+    async def _run_external_agent_jsonl(
+        self,
+        *,
+        run_id: str,
+        project_path: Path,
+        argv: list[str],
+        label: str,
+        handler: Any,
+    ) -> None:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(project_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            limit=8 * 1024 * 1024,
+        )
+        self._active_procs[run_id] = proc
+
+        assert proc.stdout is not None
+        while True:
+            if run_id in self._cancelled_runs:
+                proc.terminate()
+                break
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            raw_line = line.decode("utf-8", errors="replace").strip()
+            if not raw_line:
+                continue
+            try:
+                evt = json.loads(raw_line)
+            except Exception:
+                await self._append_token(run_id, raw_line + "\n")
+                continue
+            if isinstance(evt, dict):
+                await handler(evt)
+
+        stderr_bytes = b""
+        if proc.stderr is not None:
+            stderr_bytes = await proc.stderr.read()
+        rc = await proc.wait()
+
+        if run_id in self._cancelled_runs:
+            return
+        if rc != 0:
+            err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(err_msg or f"{label} kết thúc với mã lỗi {rc}")
+
+    async def _run_claude_code(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        del run_dir
+        claude_bin = find_cli_binary("claude")
+        if not claude_bin:
+            raise RuntimeError(
+                "Chưa cài đặt Claude Code CLI (`claude`) trên máy tính PC. "
+                "Cài đặt bằng: `npm install -g @anthropic-ai/claude-code` rồi chạy `claude` để đăng nhập."
+            )
+
+        run = self.get_run(run_id)
+        prompt_body = self._format_prompt_with_attachments(run)
+        cli_args = ["-p", prompt_body, "--output-format", "stream-json", "--verbose"]
+        if run.execution_policy == "read_only":
+            cli_args.extend(["--permission-mode", "plan"])
+        elif run.execution_policy == "auto_workspace":
+            cli_args.append("--dangerously-skip-permissions")
+
+        await self._append_thought(
+            run_id,
+            f"🤖 Đang thực thi bằng **Claude Code CLI** tại `{project_path}` (Quyền: `{run.execution_policy}`)\n",
+        )
+
+        streamed_any = False
+        tool_index: dict[str, PromptToolCall] = {}
+
+        async def _handle_event(evt: dict[str, Any]) -> None:
+            nonlocal streamed_any
+            etype = str(evt.get("type") or "")
+            if etype == "assistant":
+                msg = evt.get("message") or {}
+                contents = msg.get("content") if isinstance(msg, dict) else None
+                if isinstance(contents, list):
+                    for block in contents:
+                        if not isinstance(block, dict):
+                            continue
+                        btype = block.get("type")
+                        if btype == "thinking" and block.get("thinking"):
+                            await self._append_thought(run_id, str(block["thinking"]) + "\n")
+                        elif btype == "text" and block.get("text"):
+                            await self._append_token(run_id, str(block["text"]))
+                            streamed_any = True
+                        elif btype == "tool_use":
+                            tc_id = str(block.get("id") or f"claude_{secrets.token_hex(4)}")
+                            t_name = str(block.get("name") or "tool")
+                            t_args = block.get("input") if isinstance(block.get("input"), dict) else None
+                            ptc = PromptToolCall(
+                                id=tc_id,
+                                name=t_name,
+                                args=t_args,
+                                status="running",
+                                timestamp=utc_now_iso(),
+                            )
+                            tool_index[tc_id] = ptc
+                            await self._emit_tool_call(run_id, ptc)
+            elif etype == "user":
+                msg = evt.get("message") or {}
+                contents = msg.get("content") if isinstance(msg, dict) else None
+                if isinstance(contents, list):
+                    for block in contents:
+                        if isinstance(block, dict) and block.get("type") == "tool_result":
+                            tc_id = str(block.get("tool_use_id") or "")
+                            prev = tool_index.get(tc_id)
+                            if prev:
+                                await self._emit_tool_call(
+                                    run_id,
+                                    PromptToolCall(
+                                        id=tc_id,
+                                        name=prev.name,
+                                        args=prev.args,
+                                        status="error" if block.get("is_error") else "completed",
+                                        timestamp=utc_now_iso(),
+                                    ),
+                                )
+            elif etype == "content_block_delta":
+                delta = evt.get("delta") or {}
+                if isinstance(delta, dict):
+                    if delta.get("type") == "thinking_delta" and delta.get("thinking"):
+                        await self._append_thought(run_id, str(delta["thinking"]))
+                    elif delta.get("type") == "text_delta" and delta.get("text"):
+                        await self._append_token(run_id, str(delta["text"]))
+                        streamed_any = True
+            elif etype == "result":
+                if evt.get("is_error") and evt.get("result"):
+                    raise RuntimeError(str(evt["result"]))
+                if evt.get("result") and not streamed_any:
+                    await self._append_token(run_id, str(evt["result"]))
+                    streamed_any = True
+
+        await self._run_external_agent_jsonl(
+            run_id=run_id,
+            project_path=project_path,
+            argv=_wrap_cli_argv(claude_bin, cli_args),
+            label="Claude Code CLI",
+            handler=_handle_event,
+        )
+
+    async def _run_codex(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        del run_dir
+        codex_bin = find_cli_binary("codex")
+        if not codex_bin:
+            raise RuntimeError(
+                "Chưa cài đặt OpenAI Codex CLI (`codex`) trên máy tính PC. "
+                "Cài đặt bằng: `npm install -g @openai/codex` rồi chạy `codex` để đăng nhập."
+            )
+
+        run = self.get_run(run_id)
+        prompt_body = self._format_prompt_with_attachments(run)
+        cli_args = ["exec", "--json"]
+        if run.execution_policy == "read_only":
+            cli_args.extend(["--sandbox", "read-only"])
+        elif run.execution_policy == "auto_workspace":
+            cli_args.append("--full-auto")
+        else:
+            cli_args.extend(["--sandbox", "workspace-write"])
+        cli_args.append(prompt_body)
+
+        await self._append_thought(
+            run_id,
+            f"⚡ Đang thực thi bằng **OpenAI Codex CLI** tại `{project_path}` (Quyền: `{run.execution_policy}`)\n",
+        )
+
+        async def _handle_event(evt: dict[str, Any]) -> None:
+            etype = str(evt.get("type") or "")
+            item = evt.get("item") if isinstance(evt.get("item"), dict) else None
+            if etype in {"item.started", "item.updated", "item.completed"} and item is not None:
+                itype = str(item.get("type") or "")
+                item_id = str(item.get("id") or f"codex_{secrets.token_hex(4)}")
+                if itype == "reasoning" and item.get("text"):
+                    await self._append_thought(run_id, str(item["text"]) + "\n")
+                elif itype == "agent_message" and item.get("text"):
+                    if etype == "item.completed":
+                        await self._append_token(run_id, str(item["text"]))
+                elif itype in {"command_execution", "file_change", "mcp_tool_call"}:
+                    status = "running" if etype != "item.completed" else (
+                        "error" if item.get("exit_code") not in (None, 0) or item.get("status") == "failed" else "completed"
+                    )
+                    args_dict = {k: v for k, v in item.items() if k in {"command", "changes", "tool", "arguments", "exit_code"}}
+                    await self._emit_tool_call(
+                        run_id,
+                        PromptToolCall(
+                            id=item_id,
+                            name=itype,
+                            args=args_dict or None,
+                            status=status,
+                            timestamp=utc_now_iso(),
+                        ),
+                    )
+            elif etype in {"error", "turn.failed"}:
+                err = evt.get("message") or (evt.get("error") or {}).get("message")
+                if err:
+                    raise RuntimeError(str(err))
+
+        await self._run_external_agent_jsonl(
+            run_id=run_id,
+            project_path=project_path,
+            argv=_wrap_cli_argv(codex_bin, cli_args),
+            label="OpenAI Codex CLI",
+            handler=_handle_event,
+        )
+
+    async def _run_opencode(self, run_id: str, project_path: Path, run_dir: Path) -> None:
+        del run_dir
+        opencode_bin = find_cli_binary("opencode")
+        if not opencode_bin:
+            raise RuntimeError(
+                "Chưa cài đặt OpenCode CLI (`opencode`) trên máy tính PC. "
+                "Cài đặt bằng: `npm install -g opencode-ai` (hoặc `curl -fsSL https://opencode.ai/install | bash`)."
+            )
+
+        run = self.get_run(run_id)
+        prompt_body = self._format_prompt_with_attachments(run)
+        cli_args = ["run", "--format", "json", prompt_body]
+
+        await self._append_thought(
+            run_id,
+            f"🧩 Đang thực thi bằng **OpenCode CLI** tại `{project_path}` (Quyền: `{run.execution_policy}`)\n",
+        )
+
+        async def _handle_event(evt: dict[str, Any]) -> None:
+            etype = str(evt.get("type") or "")
+            part = evt.get("part") if isinstance(evt.get("part"), dict) else {}
+            if etype == "reasoning":
+                txt = part.get("text") or evt.get("text")
+                if txt:
+                    await self._append_thought(run_id, str(txt) + "\n")
+            elif etype == "text":
+                txt = part.get("text") or evt.get("text") or evt.get("delta")
+                if txt:
+                    await self._append_token(run_id, str(txt))
+            elif etype in {"tool_use", "tool"}:
+                tc_id = str(part.get("callID") or part.get("id") or f"oc_{secrets.token_hex(4)}")
+                t_name = str(part.get("tool") or evt.get("tool") or "tool")
+                state = part.get("state") if isinstance(part.get("state"), dict) else {}
+                raw_status = str(state.get("status") or "completed").lower()
+                mapped_status = "running" if raw_status in {"pending", "running"} else (
+                    "error" if raw_status in {"error", "failed"} else "completed"
+                )
+                t_args = state.get("input") if isinstance(state.get("input"), dict) else None
+                await self._emit_tool_call(
+                    run_id,
+                    PromptToolCall(
+                        id=tc_id,
+                        name=t_name,
+                        args=t_args,
+                        status=mapped_status,
+                        timestamp=utc_now_iso(),
+                    ),
+                )
+            elif etype == "error":
+                err = evt.get("error") or evt.get("message")
+                if err:
+                    raise RuntimeError(str(err))
+
+        await self._run_external_agent_jsonl(
+            run_id=run_id,
+            project_path=project_path,
+            argv=_wrap_cli_argv(opencode_bin, cli_args),
+            label="OpenCode CLI",
+            handler=_handle_event,
+        )
 
     async def _run_demo(self, run_id: str, project_path: Path, run_dir: Path) -> None:
         del run_dir

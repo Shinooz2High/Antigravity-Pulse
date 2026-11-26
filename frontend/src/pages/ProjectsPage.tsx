@@ -1,32 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowUp,
-  ChevronRight,
+  Camera,
+  Code2,
   Edit3,
-  FileCode2,
-  FileImage,
-  FileText,
-  Folder,
   FolderGit2,
   GitBranch,
   Play,
   Plus,
-  RefreshCw,
-  Search,
+  StickyNote,
+  Terminal,
   Trash2,
   X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
   EmptyProjectsState,
-  BreadcrumbPath,
   TypeToConfirmDeleteModal,
 } from '../components/library';
+import { CodeEditorPane } from '../components/ide/CodeEditorPane';
+import { GitSourceControlPane } from '../components/ide/GitSourceControlPane';
+import { CheckpointsPane } from '../components/ide/CheckpointsPane';
+import { TerminalPane } from '../components/ide/TerminalPane';
+import { NotesAndPortsPane } from '../components/ide/NotesAndPortsPane';
 import {
   cn,
-  formatBytes,
-  formatRelativeTime,
   getEngineLabel,
   getPolicyLabel,
 } from '../lib/utils';
@@ -34,10 +32,11 @@ import type {
   ArtifactModalTarget,
   EngineMode,
   ExecutionPolicy,
-  FileEntry,
   Project,
   TabKey,
 } from '../types/api';
+
+type IdeTabKey = 'files' | 'git' | 'checkpoints' | 'terminal' | 'notes_ports';
 
 interface ProjectsPageProps {
   projects: Project[];
@@ -50,6 +49,18 @@ interface ProjectsPageProps {
   onNotify: (msg: string, tone?: 'info' | 'success' | 'error') => void;
 }
 
+const IDE_TABS: Array<{
+  id: IdeTabKey;
+  label: string;
+  icon: typeof Code2;
+}> = [
+  { id: 'files', label: 'Tệp & Trình soạn', icon: Code2 },
+  { id: 'git', label: 'Git', icon: GitBranch },
+  { id: 'checkpoints', label: 'Checkpoints', icon: Camera },
+  { id: 'terminal', label: 'Terminal', icon: Terminal },
+  { id: 'notes_ports', label: 'Ghi chú & Ports', icon: StickyNote },
+];
+
 export function ProjectsPage({
   projects,
   selectedProjectId,
@@ -60,11 +71,8 @@ export function ProjectsPage({
   onOpenArtifact,
   onNotify,
 }: ProjectsPageProps) {
-  const [relPath, setRelPath] = useState('');
-  const [entries, setEntries] = useState<FileEntry[]>([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const [fileQuery, setFileQuery] = useState('');
+  const [ideTab, setIdeTab] = useState<IdeTabKey>('files');
+  const [localRefreshTick, setLocalRefreshTick] = useState(0);
 
   // Modal state for Add/Edit Project
   const [modalOpen, setModalOpen] = useState(false);
@@ -76,50 +84,19 @@ export function ProjectsPage({
   const [formPolicy, setFormPolicy] = useState<ExecutionPolicy>('ask_mobile');
   const [saving, setSaving] = useState(false);
 
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId]
   );
 
-  const loadFiles = async (projId: string, path: string) => {
-    setLoadingFiles(true);
-    setFileError(null);
-    try {
-      const res = await api.getProjectFiles(projId, path);
-      setRelPath(res.current_path || '');
-      setEntries(res.entries || []);
-    } catch (err) {
-      setFileError(err instanceof Error ? err.message : 'Không thể đọc thư mục dự án');
-      setEntries([]);
-    } finally {
-      setLoadingFiles(false);
-    }
+  const combinedRefreshTick = workspaceRefreshTick + localRefreshTick;
+
+  const handleWorkspaceMutated = async () => {
+    setLocalRefreshTick((t) => t + 1);
+    await onRefreshProjects();
   };
-
-  useEffect(() => {
-    if (!selectedProject) {
-      setEntries([]);
-      setRelPath('');
-      return;
-    }
-    setRelPath('');
-    loadFiles(selectedProject.id, '');
-  }, [selectedProject?.id]);
-
-  // Refresh current folder when watcher emits workspace.changed
-  useEffect(() => {
-    if (workspaceRefreshTick > 0 && selectedProject) {
-      loadFiles(selectedProject.id, relPath);
-    }
-  }, [workspaceRefreshTick]);
-
-  const filteredEntries = useMemo(() => {
-    const q = fileQuery.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter((e) => e.name.toLowerCase().includes(q));
-  }, [entries, fileQuery]);
-
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const openCreateModal = () => {
     setEditingProject(null);
@@ -190,15 +167,11 @@ export function ProjectsPage({
       setProjectToDelete(null);
       await onRefreshProjects();
     } catch (err) {
-      onNotify(err instanceof Error ? err.message : 'Không thể xóa dự án', 'error');
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể xóa dự án',
+        'error'
+      );
     }
-  };
-
-  const goUp = () => {
-    if (!selectedProject || !relPath) return;
-    const parts = relPath.replace(/\\/g, '/').split('/').filter(Boolean);
-    parts.pop();
-    loadFiles(selectedProject.id, parts.join('/'));
   };
 
   return (
@@ -207,10 +180,10 @@ export function ProjectsPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-slate-900 dark:text-white">
-            Dự án Workspace trên PC
+            Pocket IDE &amp; Dự án Workspace
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Quản lý thư mục mã nguồn và duyệt tệp trực tiếp từ điện thoại
+            Chỉnh sửa mã nguồn, quản lý Git, chụp Checkpoint, chạy Terminal và xem cổng trực tiếp từ điện thoại
           </p>
         </div>
         <button
@@ -265,7 +238,10 @@ export function ProjectsPage({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex shrink-0 items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       type="button"
                       onClick={() => openEditModal(p)}
@@ -328,110 +304,72 @@ export function ProjectsPage({
         </div>
       )}
 
-      {/* File Browser */}
+      {/* 5-Tab Pocket IDE */}
       {selectedProject && (
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#111827]">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
-            <div className="min-w-0 flex-1 overflow-x-auto py-1">
-              <BreadcrumbPath
-                rootName={selectedProject.name}
-                currentPath={relPath}
-                subFolders={entries
-                  .filter((e) => e.is_dir)
-                  .map((e) => ({ name: e.name, path: e.rel_path }))}
-                onNavigate={(path) => loadFiles(selectedProject.id, path)}
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              {relPath && (
+        <div className="space-y-4">
+          {/* IDE Tab Bar */}
+          <nav
+            aria-label="Pocket IDE tabs"
+            className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-[#111827]"
+          >
+            {IDE_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const active = ideTab === tab.id;
+              return (
                 <button
+                  key={tab.id}
                   type="button"
-                  onClick={goUp}
-                  className="inline-flex min-h-[38px] items-center gap-1 rounded-xl border border-slate-200 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  onClick={() => setIdeTab(tab.id)}
+                  className={cn(
+                    'inline-flex min-h-[42px] shrink-0 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold transition',
+                    active
+                      ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/80'
+                  )}
                 >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                  Lên
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{tab.label}</span>
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => loadFiles(selectedProject.id, relPath)}
-                className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                title="Làm mới thư mục"
-              >
-                <RefreshCw className={cn('h-4 w-4', loadingFiles && 'animate-spin')} />
-              </button>
-            </div>
-          </div>
+              );
+            })}
+          </nav>
 
-          <div className="relative mt-3">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={fileQuery}
-              onChange={(e) => setFileQuery(e.target.value)}
-              placeholder="Lọc tệp trong thư mục hiện tại..."
-              className="min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 pr-3 pl-9 text-sm text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#090d16] dark:text-white"
+          {/* Active Tab Content */}
+          {ideTab === 'files' && (
+            <CodeEditorPane
+              project={selectedProject}
+              workspaceRefreshTick={combinedRefreshTick}
+              onNavigate={onNavigate}
+              onOpenArtifact={onOpenArtifact}
+              onNotify={onNotify}
             />
-          </div>
-
-          {fileError ? (
-            <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-600 dark:text-rose-300">
-              {fileError}
-            </div>
-          ) : loadingFiles && entries.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-400">Đang tải danh sách tệp...</div>
-          ) : filteredEntries.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-500 dark:text-slate-400">
-              Thư mục trống hoặc không khớp từ khóa tìm kiếm.
-            </div>
-          ) : (
-            <div className="mt-3 divide-y divide-slate-200/70 rounded-xl border border-slate-200/80 dark:divide-slate-800 dark:border-slate-800">
-              {filteredEntries.map((entry) => (
-                <button
-                  key={entry.rel_path}
-                  type="button"
-                  onClick={() => {
-                    if (entry.is_dir) {
-                      loadFiles(selectedProject.id, entry.rel_path);
-                    } else {
-                      onOpenArtifact({
-                        kind: 'project_file',
-                        projectId: selectedProject.id,
-                        projectName: selectedProject.name,
-                        entry,
-                      });
-                    }
-                  }}
-                  className="flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-900/70"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    {entry.is_dir ? (
-                      <Folder className="h-5 w-5 shrink-0 text-amber-400" />
-                    ) : entry.category === 'image' ? (
-                      <FileImage className="h-5 w-5 shrink-0 text-cyan-500" />
-                    ) : entry.category === 'markdown' ? (
-                      <FileText className="h-5 w-5 shrink-0 text-indigo-400" />
-                    ) : (
-                      <FileCode2 className="h-5 w-5 shrink-0 text-slate-400" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {entry.name}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {entry.is_dir ? 'Thư mục' : formatBytes(entry.size)} •{' '}
-                        {formatRelativeTime(entry.modified_at)}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                </button>
-              ))}
-            </div>
           )}
-        </section>
+
+          {ideTab === 'git' && (
+            <GitSourceControlPane
+              project={selectedProject}
+              workspaceRefreshTick={combinedRefreshTick}
+              onWorkspaceMutated={handleWorkspaceMutated}
+              onNotify={onNotify}
+            />
+          )}
+
+          {ideTab === 'checkpoints' && (
+            <CheckpointsPane
+              project={selectedProject}
+              onWorkspaceMutated={handleWorkspaceMutated}
+              onNotify={onNotify}
+            />
+          )}
+
+          {ideTab === 'terminal' && (
+            <TerminalPane project={selectedProject} onNotify={onNotify} />
+          )}
+
+          {ideTab === 'notes_ports' && (
+            <NotesAndPortsPane project={selectedProject} onNotify={onNotify} />
+          )}
+        </div>
       )}
 
       {/* Add/Edit Modal */}
@@ -512,6 +450,9 @@ export function ProjectsPage({
                   >
                     <option value="antigravity_sdk">Antigravity SDK</option>
                     <option value="cli">CLI Runner</option>
+                    <option value="claude_code">Claude Code</option>
+                    <option value="codex">OpenAI Codex</option>
+                    <option value="opencode">OpenCode</option>
                     <option value="demo">Demo Simulator</option>
                   </select>
                 </div>
@@ -522,7 +463,9 @@ export function ProjectsPage({
                   </label>
                   <select
                     value={formPolicy}
-                    onChange={(e) => setFormPolicy(e.target.value as ExecutionPolicy)}
+                    onChange={(e) =>
+                      setFormPolicy(e.target.value as ExecutionPolicy)
+                    }
                     className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#090d16] dark:text-white"
                   >
                     <option value="ask_mobile">Hỏi duyệt trên ĐT</option>
@@ -552,6 +495,7 @@ export function ProjectsPage({
           </form>
         </div>
       )}
+
       {/* Lucian Danger Delete Modal */}
       <TypeToConfirmDeleteModal
         isOpen={!!projectToDelete}

@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from ..models import (
     CreateProjectRequest,
@@ -21,6 +22,38 @@ from ..services.project_service import ProjectService
 from ..utils import content_disposition_header
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+class SaveFileContentRequest(BaseModel):
+    path: str
+    content: str
+    expected_modified_at: str | None = None
+    force: bool = False
+
+
+class MkdirRequest(BaseModel):
+    path: str
+
+
+class MkdirResponse(BaseModel):
+    created: bool = True
+    rel_path: str
+
+
+class RenameEntryRequest(BaseModel):
+    old_path: str
+    new_path: str
+
+
+class RenameEntryResponse(BaseModel):
+    renamed: bool = True
+    old_path: str
+    new_path: str
+
+
+class DeleteEntryResponse(BaseModel):
+    deleted: bool = True
+    rel_path: str
 
 
 @router.get("", response_model=ProjectsResponse)
@@ -101,6 +134,59 @@ async def get_project_file_content(
 ) -> FileContentResponse:
     svc: ProjectService = request.app.state.project_service
     return svc.get_file_content(project_id, path)
+
+
+@router.put("/{project_id}/file-content", response_model=FileContentResponse)
+async def save_project_file_content(
+    project_id: str,
+    body: SaveFileContentRequest,
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> FileContentResponse:
+    svc: ProjectService = request.app.state.project_service
+    return svc.save_file_content(
+        project_id,
+        body.path,
+        body.content,
+        expected_modified_at=body.expected_modified_at,
+        force=body.force,
+    )
+
+
+@router.post("/{project_id}/mkdir", response_model=MkdirResponse)
+async def create_project_directory(
+    project_id: str,
+    body: MkdirRequest,
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> MkdirResponse:
+    svc: ProjectService = request.app.state.project_service
+    clean_rel = svc.create_directory(project_id, body.path)
+    return MkdirResponse(created=True, rel_path=clean_rel)
+
+
+@router.post("/{project_id}/rename", response_model=RenameEntryResponse)
+async def rename_project_entry(
+    project_id: str,
+    body: RenameEntryRequest,
+    request: Request,
+    _: dict[str, Any] = Depends(require_auth),
+) -> RenameEntryResponse:
+    svc: ProjectService = request.app.state.project_service
+    old_rel, new_rel = svc.rename_entry(project_id, body.old_path, body.new_path)
+    return RenameEntryResponse(renamed=True, old_path=old_rel, new_path=new_rel)
+
+
+@router.delete("/{project_id}/entry", response_model=DeleteEntryResponse)
+async def delete_project_entry(
+    project_id: str,
+    request: Request,
+    path: str = Query(...),
+    _: dict[str, Any] = Depends(require_auth),
+) -> DeleteEntryResponse:
+    svc: ProjectService = request.app.state.project_service
+    clean_rel = svc.delete_entry(project_id, path)
+    return DeleteEntryResponse(deleted=True, rel_path=clean_rel)
 
 
 @router.get("/{project_id}/file-raw")

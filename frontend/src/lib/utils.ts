@@ -113,6 +113,12 @@ export function getEngineLabel(mode: EngineMode): string {
       return 'Antigravity SDK';
     case 'cli':
       return 'CLI Runner';
+    case 'claude_code':
+      return 'Claude Code';
+    case 'codex':
+      return 'OpenAI Codex';
+    case 'opencode':
+      return 'OpenCode';
     case 'demo':
       return 'Demo Simulator';
   }

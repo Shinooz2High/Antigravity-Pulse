@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from pydantic import BaseModel, Field
 
-EngineMode = Literal["antigravity_sdk", "cli", "demo"]
+EngineMode = Literal["antigravity_sdk", "cli", "claude_code", "codex", "opencode", "demo"]
 ExecutionPolicy = Literal["read_only", "ask_mobile", "auto_workspace"]
 AuthSource = Literal["auto", "agy_account", "google_oauth", "api_key", "vertex_adc"]
 TunnelMode = Literal["cloudflare_quick", "serveo_ssh", "cloudflare_named"]
@@ -297,6 +297,14 @@ class ApproveToolResponse(BaseModel):
 # --- System, Settings & Tunnel ---
 
 
+class AgentCliInfo(BaseModel):
+    id: str
+    name: str
+    installed: bool
+    version: str | None = None
+    command: str
+
+
 class SystemStatusResponse(BaseModel):
     hostname: str
     os: str
@@ -321,6 +329,7 @@ class SystemStatusResponse(BaseModel):
     tunnel_short_url: str | None = None
     connected_clients: int
     uptime_seconds: float
+    installed_agents: list[AgentCliInfo] = Field(default_factory=list)
 
 
 class SystemSettingsResponse(BaseModel):

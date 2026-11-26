@@ -13,17 +13,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from .config import AppConfig
-from .routers import antigravity, auth, google_auth, projects, prompts, system, ws
+from .routers import antigravity, auth, google_auth, ide, projects, prompts, system, workspace_tools, ws
 from .services.auth_service import AuthService
 from .services.brain_scanner import BrainScanner
+from .services.checkpoint_service import CheckpointService
 from .services.discord_rpc_service import DiscordRpcService
 from .services.file_watcher import FileWatcherService
+from .services.git_service import GitService
 from .services.google_auth_service import GoogleAuthService
+from .services.memory_service import MemoryService
 from .services.models_service import ModelsService
 from .services.project_service import ProjectService
 from .services.quick_connect_service import QuickConnectService
 from .services.runner_service import RunnerService
 from .services.settings_service import SettingsService
+from .services.terminal_service import TerminalService
 from .services.tunnel_service import TunnelService
 from .services.ws_manager import WebSocketManager
 from .utils import safe_jail_path
@@ -58,6 +62,10 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     ws_manager = WebSocketManager()
     project_service = ProjectService(cfg, settings_service)
     brain_scanner = BrainScanner(settings_service)
+    checkpoint_service = CheckpointService(cfg, project_service)
+    git_service = GitService(project_service)
+    memory_service = MemoryService(cfg)
+    terminal_service = TerminalService(project_service, ws_manager)
     tunnel_service = TunnelService(cfg.agy_port, ws_manager, settings_service)
     quick_connect_service = QuickConnectService(cfg.agy_port, settings_service, tunnel_service, ws_manager)
     runner_service = RunnerService(
@@ -66,6 +74,8 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
         project_service,
         ws_manager,
         google_auth_service=google_auth_service,
+        memory_service=memory_service,
+        checkpoint_service=checkpoint_service,
     )
     file_watcher = FileWatcherService(settings_service, project_service, ws_manager)
     discord_rpc_service = DiscordRpcService(settings_service, project_service, brain_scanner)
@@ -88,6 +98,7 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
             discord_rpc_service.stop()
             quick_connect_service.stop_background_sync()
             file_watcher.stop()
+            await terminal_service.stop_all()
             await runner_service.stop()
             await tunnel_service.stop()
 
@@ -106,6 +117,10 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     app.state.ws_manager = ws_manager
     app.state.project_service = project_service
     app.state.brain_scanner = brain_scanner
+    app.state.checkpoint_service = checkpoint_service
+    app.state.git_service = git_service
+    app.state.memory_service = memory_service
+    app.state.terminal_service = terminal_service
     app.state.tunnel_service = tunnel_service
     app.state.quick_connect_service = quick_connect_service
     app.state.runner_service = runner_service
@@ -123,6 +138,8 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
     app.include_router(auth.router)
     app.include_router(google_auth.router)
     app.include_router(projects.router)
+    app.include_router(ide.router)
+    app.include_router(workspace_tools.router)
     app.include_router(antigravity.router)
     app.include_router(prompts.router)
     app.include_router(system.router)

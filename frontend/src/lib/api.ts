@@ -1,4 +1,5 @@
 import type {
+  AgentMemoryItem,
   AntigravitySessionSummary,
   ArtifactCategory,
   ArtifactItem,
@@ -779,5 +780,48 @@ export const api = {
 
   getDiscordRpcStatus(): Promise<DiscordRpcStatus> {
     return apiFetch<DiscordRpcStatus>('/api/system/discord-rpc');
+  },
+
+  // Agent Memories
+  async getMemories(projectId?: string): Promise<AgentMemoryItem[]> {
+    const params = new URLSearchParams();
+    if (projectId) params.set('project_id', projectId);
+    const qs = params.toString();
+    const res = await apiFetch<
+      AgentMemoryItem[] | { memories?: AgentMemoryItem[]; items?: AgentMemoryItem[] }
+    >(`/api/tools/memories${qs ? `?${qs}` : ''}`);
+    if (Array.isArray(res)) return res;
+    return res.memories ?? res.items ?? [];
+  },
+
+  async saveMemory(payload: {
+    id?: string;
+    title: string;
+    content: string;
+    scope?: 'global' | 'project';
+    project_id?: string | null;
+    mode?: 'always' | 'passive';
+  }): Promise<AgentMemoryItem> {
+    const res = await apiFetch<AgentMemoryItem | { memory: AgentMemoryItem }>(
+      '/api/tools/memories',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          scope: 'project',
+          mode: 'always',
+          ...payload,
+        }),
+      }
+    );
+    return 'memory' in res ? res.memory : res;
+  },
+
+  deleteMemory(id: string): Promise<{ deleted: boolean }> {
+    return apiFetch<{ deleted: boolean }>(
+      `/api/tools/memories/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+      }
+    );
   },
 };

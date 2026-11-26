@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -206,11 +207,15 @@ class ProjectService:
                     self._save()
                     return
 
-    def list_files(self, project_id: str, rel_path: str = "") -> ProjectFilesResponse:
+    def _require_project_root(self, project_id: str) -> Path:
         project = self.get_project(project_id)
         root = Path(project.path).resolve()
         if not root.is_dir():
             raise HTTPException(status_code=404, detail="Project directory does not exist on disk")
+        return root
+
+    def list_files(self, project_id: str, rel_path: str = "") -> ProjectFilesResponse:
+        root = self._require_project_root(project_id)
 
         target_dir, clean_rel = safe_jail_path(root, rel_path, allow_root=True)
         if not target_dir.exists() or not target_dir.is_dir():
@@ -253,10 +258,7 @@ class ProjectService:
         return ProjectFilesResponse(current_path=clean_rel, entries=entries)
 
     def get_file_content(self, project_id: str, rel_path: str) -> FileContentResponse:
-        project = self.get_project(project_id)
-        root = Path(project.path).resolve()
-        if not root.is_dir():
-            raise HTTPException(status_code=404, detail="Project directory does not exist on disk")
+        root = self._require_project_root(project_id)
 
         target_file, clean_rel = safe_jail_path(root, rel_path, allow_root=False)
         if not target_file.exists():
@@ -279,11 +281,122 @@ class ProjectService:
             modified_at=timestamp_to_iso(st.st_mtime),
         )
 
+    def save_file_content(
+        self,
+        project_id: str,
+        rel_path: str,
+        content: str,
+        *,
+        expected_modified_at: str | None = None,
+        force: bool = False,
+    ) -> FileContentResponse:
+        root = self._require_project_root(project_id)
+        target_file, clean_rel = safe_jail_path(root, rel_path, allow_root=False)
+
+        if target_file.exists():
+            if target_file.is_dir():
+                raise HTTPException(status_code=400, detail="Path is a directory")
+            st = target_file.stat()
+            current_modified_at = timestamp_to_iso(st.st_mtime)
+            if not force and expected_modified_at is not None and expected_modified_at != current_modified_at:
+                raise HTTPException(status_code=409, detail="File has been modified on disk")
+
+        try:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(target_file, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
+            st = target_file.stat()
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=f"Permission denied: {exc}") from exc
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to write file: {exc}") from exc
+
+        self.touch_activity(project_id)
+        category, mime_type = classify_file(target_file)
+        raw_url = f"/api/projects/{project_id}/file-raw?path={quote(clean_rel)}"
+        return FileContentResponse(
+            rel_path=clean_rel,
+            name=target_file.name,
+            size=int(st.st_size),
+            mime_type=mime_type,
+            category=category,
+            text=content,
+            raw_url=raw_url,
+            modified_at=timestamp_to_iso(st.st_mtime),
+        )
+
+    def create_directory(self, project_id: str, rel_path: str) -> str:
+        root = self._require_project_root(project_id)
+        target_dir, clean_rel = safe_jail_path(root, rel_path, allow_root=False)
+        if target_dir.exists() and not target_dir.is_dir():
+            raise HTTPException(status_code=400, detail="A file already exists at that path")
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=f"Permission denied: {exc}") from exc
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to create directory: {exc}") from exc
+        return clean_rel
+
+    def rename_entry(self, project_id: str, old_path: str, new_path: str) -> tuple[str, str]:
+        root = self._require_project_root(project_id)
+        src, old_rel = safe_jail_path(root, old_path, allow_root=False)
+        dst, new_rel = safe_jail_path(root, new_path, allow_root=False)
+
+        if not src.exists() and not src.is_symlink():
+            raise HTTPException(status_code=404, detail="Source path not found")
+
+        if old_rel == new_rel:
+            return old_rel, new_rel
+
+        if src.is_dir() and dst.is_relative_to(src):
+            raise HTTPException(status_code=400, detail="Cannot move a directory into itself")
+
+        if dst.exists() or dst.is_symlink():
+            same_case_insensitive = False
+            try:
+                same_case_insensitive = (
+                    old_rel.lower() == new_rel.lower() and os.path.samefile(src, dst)
+                )
+            except OSError:
+                same_case_insensitive = False
+            if not same_case_insensitive:
+                raise HTTPException(status_code=409, detail="Target path already exists")
+
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=f"Permission denied: {exc}") from exc
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to rename entry: {exc}") from exc
+
+        self.touch_activity(project_id)
+        return old_rel, new_rel
+
+    def delete_entry(self, project_id: str, rel_path: str) -> str:
+        root = self._require_project_root(project_id)
+        target, clean_rel = safe_jail_path(root, rel_path, allow_root=False)
+        if target == root or not clean_rel:
+            raise HTTPException(status_code=403, detail="Cannot delete project root")
+        if not target.exists() and not target.is_symlink():
+            raise HTTPException(status_code=404, detail="Entry not found")
+
+        try:
+            if target.is_symlink() or target.is_file():
+                target.unlink()
+            elif target.is_dir():
+                shutil.rmtree(target)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=f"Permission denied: {exc}") from exc
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to delete entry: {exc}") from exc
+
+        self.touch_activity(project_id)
+        return clean_rel
+
     def resolve_file_raw(self, project_id: str, rel_path: str) -> tuple[Path, str, str]:
-        project = self.get_project(project_id)
-        root = Path(project.path).resolve()
-        if not root.is_dir():
-            raise HTTPException(status_code=404, detail="Project directory does not exist on disk")
+        root = self._require_project_root(project_id)
 
         target_file, _ = safe_jail_path(root, rel_path, allow_root=False)
         if not target_file.exists():

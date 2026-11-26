@@ -19,6 +19,28 @@ from app.services.tunnel_service import (
 from app.services.ws_manager import WebSocketManager
 
 
+@pytest.fixture(autouse=True)
+def _isolate_tunnel_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in (
+        "CLOUDFLARE_TUNNEL_TOKEN",
+        "CLOUDFLARE_TUNNEL_URL",
+        "AGY_TUNNEL_MODE",
+        "AGY_TUNNEL_SUBDOMAIN",
+        "AGY_TUNNEL_SHORT_ALIAS",
+        "GEMINI_API_KEY",
+        "GOOGLE_GENAI_USE_VERTEXAI",
+        "GOOGLE_CLOUD_PROJECT",
+        "AGY_BRIDGE_PIN",
+        "AGY_MODEL",
+        "AGY_AUTH_SOURCE",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+
+def _isolated_cfg(tmp_path) -> AppConfig:
+    return AppConfig(_env_file=None, AGY_DATA_DIR=str(tmp_path))
+
+
 def test_sanitizers_and_normalizer() -> None:
     assert sanitize_subdomain("  My PC_01! ") == "my-pc-01"
     assert sanitize_subdomain("---") is None
@@ -30,7 +52,7 @@ def test_sanitizers_and_normalizer() -> None:
 
 
 def test_tunnel_settings_persistence(tmp_path) -> None:
-    cfg = AppConfig(AGY_DATA_DIR=str(tmp_path))
+    cfg = _isolated_cfg(tmp_path)
     svc = SettingsService(cfg)
 
     initial = svc.to_response()
@@ -93,7 +115,7 @@ class _FakeProc:
 
 
 def test_cloudflare_quick_with_short_url(tmp_path) -> None:
-    cfg = AppConfig(AGY_DATA_DIR=str(tmp_path))
+    cfg = _isolated_cfg(tmp_path)
     settings = SettingsService(cfg)
     settings.update(
         UpdateSettingsRequest(
@@ -130,7 +152,7 @@ def test_cloudflare_quick_with_short_url(tmp_path) -> None:
 
 
 def test_serveo_ssh_custom_subdomain(tmp_path) -> None:
-    cfg = AppConfig(AGY_DATA_DIR=str(tmp_path))
+    cfg = _isolated_cfg(tmp_path)
     settings = SettingsService(cfg)
     settings.update(
         UpdateSettingsRequest(
@@ -162,7 +184,7 @@ def test_serveo_ssh_custom_subdomain(tmp_path) -> None:
 
 
 def test_cloudflare_named_requires_token_and_url(tmp_path) -> None:
-    cfg = AppConfig(AGY_DATA_DIR=str(tmp_path))
+    cfg = _isolated_cfg(tmp_path)
     settings = SettingsService(cfg)
     settings.update(UpdateSettingsRequest(tunnel_mode="cloudflare_named"))
     ws = WebSocketManager()

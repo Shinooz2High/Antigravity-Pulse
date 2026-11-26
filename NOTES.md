@@ -50,21 +50,27 @@ Máy chủ Python làm cầu nối thời gian thực giữa điện thoại và
 | `backend/app/routers/google_auth.py` | API đăng nhập **Continue with Google** (OAuth 2.0, ADC, Direct Token) và đồng bộ trạng thái tài khoản Google / Antigravity CLI (`agy`). |
 | `backend/app/routers/prompts.py` | Gửi prompt (kèm file/ảnh đính kèm), xem danh sách/chi tiết các phiên chạy, duyệt hoặc từ chối lời gọi tool (`approve`/`deny`), dừng phiên chạy. |
 | `backend/app/routers/antigravity.py` | Truy vấn danh sách các phiên Antigravity trên PC (`~/.gemini/antigravity/brain/*`), đọc transcript tóm tắt/đầy đủ và tải artifact. |
-| `backend/app/routers/projects.py` | Quản lý danh sách workspace/dự án, duyệt thư mục, đọc nội dung file an toàn và xem trạng thái Git (branch, dirty). |
-| `backend/app/routers/system.py` | Đọc/cập nhật cài đặt ứng dụng (API key, chính sách an toàn, model, theme), điều khiển Cloudflare Quick Tunnel, kiểm tra sức khỏe hệ thống (`/health`). |
-| `backend/app/routers/ws.py` | Endpoint WebSocket đẩy sự kiện real-time (token streaming, thoughts, yêu cầu duyệt tool, thay đổi file brain) tới điện thoại. |
+| `backend/app/routers/projects.py` | Quản lý danh sách workspace/dự án, duyệt thư mục, đọc/ghi nội dung file (`PUT file-content` chống xung đột mtime 409), tạo thư mục (`mkdir`), đổi tên (`rename`), xóa (`entry`) an toàn và xem trạng thái Git. |
+| `backend/app/routers/ide.py` | API Pocket IDE (`/api/ide/*`): Git source control (`status`, `diff`, `log`, `stage`, `unstage`, `discard`, `commit`, `pull`, `push`, `checkout`) và Workspace Checkpoints (`list`, `create`, `preview`, `restore`). |
+| `backend/app/routers/workspace_tools.py` | API công cụ workspace (`/api/tools/*`): Terminal đa phiên (`sessions`, `exec`, `interrupt`), quét cổng dev server (`/ports`), Bộ nhớ AI (`/memories`) và Ghi chú/Checklist (`/notes`). |
+| `backend/app/routers/system.py` | Đọc/cập nhật cài đặt ứng dụng, điều khiển tunnel, kiểm tra trạng thái hệ thống và phát hiện các CLI Agent đã cài (`agy`, `claude`, `codex`, `opencode`). |
+| `backend/app/routers/ws.py` | Endpoint WebSocket đẩy sự kiện real-time (token streaming, thoughts, terminal output, yêu cầu duyệt tool, thay đổi file brain) tới điện thoại. |
 
 ### 2.3. Services (`backend/app/services/`)
 | File | Mô tả chi tiết |
 | --- | --- |
 | `backend/app/services/auth_service.py` | Sinh và xác thực PIN 6 số, QR pairing token và session token. |
 | `backend/app/services/settings_service.py` | Lưu trữ và đọc cấu hình cục bộ tại `backend/data/settings.json` (tự động ẩn khỏi Git). |
-| `backend/app/services/runner_service.py` | Lõi thực thi prompt hỗ trợ 3 chế độ: `Antigravity SDK`, `CLI Runner (agy)` và `Demo Simulator`; quản lý hàng đợi duyệt tool và lưu lịch sử runs. |
+| `backend/app/services/runner_service.py` | Lõi thực thi prompt đa Agent (`antigravity_sdk`, `cli`, `claude_code`, `codex`, `opencode`, `demo`); tự động chụp checkpoint `auto` trước khi sửa code, chèn ngữ cảnh Memory và trích xuất block ```` ```memory``` ````. |
+| `backend/app/services/git_service.py` | Thực thi các lệnh Git an toàn trong thư mục dự án (`status --porcelain`, `diff`, `log`, `stage`, `unstage`, `discard`, `commit`, `pull`, `push`, `checkout`). |
+| `backend/app/services/checkpoint_service.py` | Chụp, liệt kê, xem trước diff và khôi phục snapshot workspace dạng `.zip` (tự tạo checkpoint `undo` trước khi khôi phục). |
+| `backend/app/services/terminal_service.py` | Quản lý phiên terminal bất đồng bộ theo dự án (PowerShell/Bash, theo dõi `cwd`, buffer 64 KB, stream WS, `interrupt`) và quét cổng dev cục bộ. |
+| `backend/app/services/memory_service.py` | Lưu trữ bền vững Bộ nhớ Agent (`memories.json`) và Ghi chú/Checklist (`notes.json`), khớp ngữ cảnh tự động và phân tích block ```` ```memory``` ````. |
 | `backend/app/services/brain_scanner.py` | Quét và phân tích dữ liệu hội thoại Antigravity trên PC (`transcript.jsonl`, `transcript_full.jsonl`, artifacts, thống kê token). |
 | `backend/app/services/file_watcher.py` | Theo dõi thay đổi thời gian thực trên thư mục brain bằng `watchdog` và phát sự kiện qua WebSocket. |
-| `backend/app/services/project_service.py` | Duyệt cây thư mục workspace có kiểm soát, đọc preview file và trích xuất thông tin Git. |
+| `backend/app/services/project_service.py` | Duyệt cây thư mục workspace có kiểm soát, đọc/ghi/tạo/đổi tên/xóa file bị jail an toàn và trích xuất thông tin Git. |
 | `backend/app/services/models_service.py` | Quản lý danh sách model AI khả dụng và cấu hình chọn model. |
-| `backend/app/services/tunnel_service.py` | Khởi chạy, theo dõi và dừng tiến trình `cloudflared` Quick Tunnel để truy cập từ xa ngoài mạng LAN. |
+| `backend/app/services/tunnel_service.py` | Khởi chạy, theo dõi và dừng tiến trình `cloudflared` / `serveo` Tunnel để truy cập từ xa ngoài mạng LAN. |
 | `backend/app/services/quick_connect_service.py` | Tạo mã kết nối nhanh 6 ký tự và đồng bộ thông tin tunnel mã hóa đầu cuối lên relay để đăng nhập 1 chạm qua `https://agypulse.dpdns.org/?c=...`. |
 | `backend/app/services/google_auth_service.py` | Quản lý xác thực Google OAuth 2.0, ADC và phiên đăng nhập Antigravity CLI (`agy`). |
 | `backend/app/services/ws_manager.py` | Quản lý kết nối WebSocket đa thiết bị và broadcast sự kiện. |
@@ -77,6 +83,8 @@ Máy chủ Python làm cầu nối thời gian thực giữa điện thoại và
 | `backend/tests/test_brain_scanner.py` | Kiểm thử quét thư mục brain và phân tích transcript. |
 | `backend/tests/test_projects_and_artifacts.py` | Kiểm thử duyệt file dự án, chống path traversal và tải artifact. |
 | `backend/tests/test_runner_and_ws.py` | Kiểm thử thực thi prompt, luồng duyệt tool và stream WebSocket. |
+| `backend/tests/test_tunnel.py` | Kiểm thử các chế độ tunnel và cô lập biến môi trường `.env`. |
+| `backend/tests/test_v2_antigem_upgrade.py` | Kiểm thử tích hợp v2.0: ghi/sửa/xóa file & xung đột 409, Git repo, Checkpoints & Undo, Terminal & Port scanner, Agent Memories, Notes & `installed_agents`. |
 
 ---
 
@@ -118,7 +126,8 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | `frontend/src/index.css` | Stylesheet chính tích hợp Tailwind CSS và biến CSS giao diện. |
 | `frontend/src/vite-env.d.ts` | Khai báo kiểu TypeScript cho môi trường Vite. |
 | `frontend/src/types/api.ts` | Định nghĩa toàn bộ interface TypeScript cho dữ liệu API và WebSocket events. |
-| `frontend/src/lib/api.ts` | Client gọi REST API tới backend (tự động gắn token, xử lý lỗi, upload file, cấu hình `PUBLIC_WEB_PORTAL_URL`). |
+| `frontend/src/lib/api.ts` | Client gọi REST API tới backend (tự động gắn token, xử lý lỗi, upload file, Memories API, cấu hình `PUBLIC_WEB_PORTAL_URL`). |
+| `frontend/src/lib/ideApi.ts` | Client REST API chuyên cho Pocket IDE: lưu/tạo/đổi tên/xóa file (`IdeApiError` 409), Git, Checkpoints, Terminal sessions, Live Ports và Notes. |
 | `frontend/src/lib/quickConnect.ts` | Giải mã mã kết nối nhanh 6 ký tự phía client (SHA-256/HMAC-SHA256) và tự động tìm đường hầm PC đang online. |
 | `frontend/src/lib/native.ts` | Lớp trừu tượng tương tác tính năng thiết bị native qua Capacitor (Haptics, StatusBar, LocalNotifications, Share, Browser). |
 | `frontend/src/lib/utils.ts` | Các hàm tiện ích giao diện (format thời gian, dung lượng, xử lý chuỗi, v.v.). |
@@ -129,9 +138,9 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | File | Mô tả chi tiết |
 | --- | --- |
 | `frontend/src/pages/DashboardPage.tsx` | Trang tổng quan theo dõi trạng thái PC Bridge, các phiên Antigravity gần đây và phím tắt nhanh. |
-| `frontend/src/pages/PromptPage.tsx` | Phòng điều khiển Prompt di động: nhập lệnh, đính kèm ảnh/file, chọn model/chính sách an toàn, theo dõi luồng suy nghĩ & duyệt tool trực tiếp. |
+| `frontend/src/pages/PromptPage.tsx` | AI Chat Studio v2: chọn đa Agent (`antigravity_sdk`, `cli`, `claude_code`, `codex`, `opencode`, `demo`), bảng lệnh `/` & custom slash commands, hàng đợi tin nhắn next-turn, giọng nói STT/TTS, Bộ nhớ AI, xuất `.md`/`.html` và nhận ngữ cảnh từ IDE. |
 | `frontend/src/pages/OutputsPage.tsx` | Kho kết quả & Artifacts: xem báo cáo Markdown, hình ảnh, code, log phiên chạy từ PC. |
-| `frontend/src/pages/ProjectsPage.tsx` | Trình duyệt Workspace & File trên PC, xem cấu trúc thư mục, trạng thái Git và nội dung file. |
+| `frontend/src/pages/ProjectsPage.tsx` | Pocket IDE 5 tab (Code Editor, Git, Checkpoints, Terminal, Notes & Ports) cùng trình quản lý danh sách dự án trên PC. |
 | `frontend/src/pages/SettingsPage.tsx` | Trang cài đặt toàn diện: cấu hình API key, chế độ chạy, bảo mật, bật/tắt Cloudflare Tunnel, tùy chỉnh giao diện và ghép nối thiết bị. |
 
 ### 3.5. Components (`frontend/src/components/`)
@@ -145,6 +154,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | `ModelSelectorModal.tsx` | Hộp thoại chọn model AI để thực thi prompt. |
 | `QrScannerModal.tsx` | Modal mở camera quét mã QR ghép nối trực tiếp bằng `jsqr`. |
 | `ToolApprovalBanner.tsx` | Thanh thông báo nổi yêu cầu người dùng duyệt hoặc từ chối lời gọi tool của AI ngay trên điện thoại. |
+| `ide/` | Bộ component Pocket IDE: `CodeEditorPane.tsx` (soạn thảo multi-tab, tìm kiếm, xử lý xung đột 409, gửi sang AI Chat), `GitSourceControlPane.tsx` (diff, stage, commit, pull/push, log), `CheckpointsPane.tsx` (snapshot & restore), `TerminalPane.tsx` (shell đa phiên + phím ảo mobile), `NotesAndPortsPane.tsx` (ghi chú checklist & xem trước dev server ports). |
 | `library/` | Bộ UI component tái sử dụng: `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `ThinkingAccordion`, `TypeToConfirmDeleteModal`, `UndoableDeleteList`. |
 | `theme/` | Các component hiệu ứng giao diện: `BootIntroOverlay` (màn hình khởi động), `CustomThemeModal` (trình tùy chỉnh theme), `LiveWallpaperLayer` (lớp hình nền động). |
 
