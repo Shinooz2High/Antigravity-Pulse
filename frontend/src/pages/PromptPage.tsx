@@ -1045,7 +1045,7 @@ export function PromptPage({
     activeRun?.tool_calls?.length,
   ]);
 
-  // Close popovers on outside click
+  // Close popovers on outside click or Escape key
   useEffect(() => {
     const closeAllMenus = () => {
       setProjectMenuOpen(false);
@@ -1053,8 +1053,18 @@ export function PromptPage({
       setAgentMenuOpen(false);
       setExportMenuOpen(false);
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeAllMenus();
+        setSlashPaletteDismissed(true);
+      }
+    };
     window.addEventListener('click', closeAllMenus);
-    return () => window.removeEventListener('click', closeAllMenus);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('click', closeAllMenus);
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   // Cleanup speech recognition & synthesis on unmount
@@ -1628,14 +1638,14 @@ export function PromptPage({
       {/* ============================================================== */}
       {/* STUDIO V2 UTILITY BAR (Memories + Export + Quick Slash Modal)  */}
       {/* ============================================================== */}
-      <div className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#0a0f1d]/70 px-3 py-2 backdrop-blur-xl sm:px-8">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-slate-300">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 font-semibold text-cyan-300">
+      <div className="agy-glass-header relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-white/85 px-3 py-2 backdrop-blur-xl sm:px-8 dark:border-white/10 dark:bg-[#0a0f1d]/70">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 font-semibold text-cyan-700 dark:text-cyan-300">
             <Cpu className="h-3.5 w-3.5" />
             <span className="truncate">{currentEngineMeta.label}</span>
           </span>
           {selectedProject && (
-            <span className="hidden truncate text-[11px] text-slate-400 sm:inline">
+            <span className="hidden truncate text-[11px] opacity-80 sm:inline">
               {selectedProject.name}
             </span>
           )}
@@ -1646,10 +1656,10 @@ export function PromptPage({
           <button
             type="button"
             onClick={() => setIsCustomSlashModalOpen(true)}
-            className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10 hover:border-cyan-400/40"
+            className="agy-studio-btn inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-200/70 hover:border-cyan-500/40 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:border-cyan-400/40"
             title="Quản lý & tạo lệnh / tùy chỉnh"
           >
-            <Slash className="h-3 w-3 text-cyan-400" />
+            <Slash className="h-3 w-3 text-cyan-600 dark:text-cyan-400" />
             <span className="hidden xs:inline">Lệnh /</span>
           </button>
 
@@ -1657,13 +1667,13 @@ export function PromptPage({
           <button
             type="button"
             onClick={() => setIsMemoryModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10 hover:border-purple-400/40"
+            className="agy-studio-btn inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-200/70 hover:border-purple-500/40 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:border-purple-400/40"
             title="Mở Bộ nhớ AI (Memories)"
           >
-            <Brain className="h-3.5 w-3.5 text-purple-400" />
+            <Brain className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
             <span>Bộ nhớ AI</span>
             {memories.length > 0 && (
-              <span className="rounded-full bg-purple-500/25 px-1.5 py-0 text-[10px] text-purple-200">
+              <span className="rounded-full bg-purple-500/20 px-1.5 py-0 text-[10px] text-purple-700 dark:bg-purple-500/25 dark:text-purple-200">
                 {memories.length}
               </span>
             )}
@@ -1674,10 +1684,10 @@ export function PromptPage({
             <button
               type="button"
               onClick={() => setExportMenuOpen((o) => !o)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10 hover:border-emerald-400/40"
+              className="agy-studio-btn inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-200/70 hover:border-emerald-500/40 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:border-emerald-400/40"
               title="Xuất hội thoại hiện tại"
             >
-              <Download className="h-3.5 w-3.5 text-emerald-400" />
+              <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden sm:inline">Xuất hội thoại</span>
               <ChevronDown className="h-3 w-3 opacity-60" />
             </button>
@@ -1715,12 +1725,12 @@ export function PromptPage({
           /* EMPTY STATE: 1:1 CENTERED HANDWRITING GREETING (TAWA MALI) */
           /* ========================================================== */
           <div className="mx-auto flex min-h-[38vh] sm:min-h-[52vh] max-w-3xl flex-col items-center justify-center px-1 text-center animate-in fade-in zoom-in-95 duration-500">
-            <h1 className="agy-mali-greeting text-2xl font-medium leading-snug tracking-wide text-white drop-shadow-[0_2px_24px_rgba(183,164,255,0.7)] sm:text-4xl md:text-5xl">
+            <h1 className="agy-mali-greeting text-2xl font-medium leading-snug tracking-wide text-slate-900 dark:text-white drop-shadow-[0_2px_24px_rgba(183,164,255,0.45)] dark:drop-shadow-[0_2px_24px_rgba(183,164,255,0.7)] sm:text-4xl md:text-5xl">
               {greetingText || 'Tawa đã sẵn sàng rồi, hôm nay sensei muốn code gì nào'}
             </h1>
 
-            <p className="mt-3 sm:mt-4 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 drop-shadow sm:text-sm">
-              <span className="shrink-0 text-pink-400">🌸</span>
+            <p className="agy-hero-subtitle mt-3 sm:mt-4 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 drop-shadow sm:text-sm">
+              <span className="shrink-0 text-pink-500 dark:text-pink-400">🌸</span>
               <span>Mọi hệ thống trên PC đã sẵn sàng, Sensei chỉ cần ra lệnh thôi nhé~</span>
             </p>
 
@@ -1734,9 +1744,9 @@ export function PromptPage({
                     setPromptText(prompt);
                     textareaRef.current?.focus();
                   }}
-                  className="group flex max-w-full items-start sm:items-center gap-2 rounded-2xl sm:rounded-full border border-white/10 bg-black/35 px-3.5 py-2 text-left sm:text-center text-xs text-slate-300 backdrop-blur-md transition hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:text-white active:scale-[0.98]"
+                  className="agy-hero-chip group flex max-w-full items-start sm:items-center gap-2 rounded-2xl sm:rounded-full border border-slate-200/90 bg-white/85 px-3.5 py-2 text-left sm:text-center text-xs text-slate-700 shadow-sm backdrop-blur-md transition hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:text-slate-900 active:scale-[0.98] dark:border-white/10 dark:bg-black/35 dark:text-slate-300 dark:hover:border-cyan-400/40 dark:hover:text-white"
                 >
-                  <Sparkles className="mt-0.5 sm:mt-0 h-3 w-3 shrink-0 text-cyan-400 transition-transform group-hover:rotate-12" />
+                  <Sparkles className="mt-0.5 sm:mt-0 h-3 w-3 shrink-0 text-cyan-500 dark:text-cyan-400 transition-transform group-hover:rotate-12" />
                   <span className="leading-snug">{prompt}</span>
                 </button>
               ))}

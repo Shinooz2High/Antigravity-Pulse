@@ -560,7 +560,7 @@ export function SettingsPage({
 
         {pairInfo ? (
           <div className="mt-4 grid gap-5 md:grid-cols-[200px_1fr]">
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-3">
+            <div className="agy-qr-surface flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
               {pairInfo.qr_svg_data_url ? (
                 <img
                   src={pairInfo.qr_svg_data_url}
@@ -687,7 +687,7 @@ export function SettingsPage({
         )}
       </section>
 
-      {/* Lucian #393 App Download Cards: Mobile (Android & iOS) + Desktop (Windows, macOS & Linux - In Development) */}
+      {/* App Download Cards: Mobile (Android & iOS) + Desktop (Windows, macOS & Linux) */}
       <section className="grid gap-4 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm sm:p-5 lg:grid-cols-2 dark:border-slate-800 dark:bg-[#111827]/80">
         <div className="flex justify-center">
           <AppDownloadCard
@@ -698,27 +698,44 @@ export function SettingsPage({
                 id: 'android',
                 label: 'Android',
                 cta: 'Tải cho Android (.apk)',
+                secondaryCta: 'Hoặc xem mọi bản phát hành',
                 meta: mobileBuilds?.android_apk_available && mobileBuilds.android_apk_size
                   ? `APK trực tiếp · ${formatBytes(mobileBuilds.android_apk_size)} · Android 8.0+`
                   : 'Android 8.0+ · APK cài trực tiếp (GitHub Release)',
+                downloadUrl: mobileBuilds?.android_apk_available
+                  ? api.getMobilePackageDownloadUrl('android')
+                  : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/download/latest/Antigravity-Pulse-Android.apk',
+                downloadFileName: 'Antigravity-Pulse-Android.apk',
+                secondaryUrl: 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest',
+                steps: [
+                  { title: 'Tải file .apk', desc: 'Nhấn nút tải hoặc mở bản Releases' },
+                  { title: 'Cho phép cài đặt', desc: 'Bật Nguồn không xác định nếu hỏi' },
+                  { title: 'Nhập mã 6 ký tự', desc: 'Hoặc bấm link Zalo / Messenger' },
+                ],
                 onDownload: () => {
-                  const apkUrl = mobileBuilds?.android_apk_available
-                    ? api.getMobilePackageDownloadUrl('android')
-                    : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/download/latest/Antigravity-Pulse-Android.apk';
-                  openExternalLink(apkUrl);
                   onNotify('Đang tải file cài đặt Antigravity-Pulse-Android.apk...', 'success');
                 },
               },
               {
                 id: 'ios',
                 label: 'iOS',
-                cta: 'Cài cho iOS (iPhone / iPad)',
+                cta: mobileBuilds?.ios_ipa_available ? 'Tải iOS IPA (.ipa)' : 'Cài lên MH chính (Safari PWA)',
+                secondaryCta: 'Tải gói iOS (.ipa / Xcode)',
                 meta: mobileBuilds?.ios_ipa_available && mobileBuilds.ios_ipa_size
                   ? `IPA · ${formatBytes(mobileBuilds.ios_ipa_size)} · iOS 15+`
                   : 'iOS 15+ · Safari (Thêm vào MH chính) / Xcode IPA',
+                downloadUrl: mobileBuilds?.ios_ipa_available
+                  ? api.getMobilePackageDownloadUrl('ios')
+                  : undefined,
+                downloadFileName: mobileBuilds?.ios_ipa_available ? 'Antigravity-Pulse-iOS.ipa' : undefined,
+                secondaryUrl: 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest',
+                steps: [
+                  { title: 'Mở bằng Safari', desc: 'Truy cập agypulse.dpdns.org' },
+                  { title: 'Bấm Chia sẻ (↑)', desc: 'Ở thanh dưới cùng trình duyệt' },
+                  { title: 'Thêm vào MH chính', desc: 'Dùng toàn màn hình như App gốc' },
+                ],
                 onDownload: () => {
                   if (mobileBuilds?.ios_ipa_available) {
-                    openExternalLink(api.getMobilePackageDownloadUrl('ios'));
                     onNotify('Đang tải gói cài đặt Antigravity Pulse (.ipa) cho iOS...', 'success');
                   } else if (canInstallPwa) {
                     triggerPwaInstall();
@@ -737,43 +754,67 @@ export function SettingsPage({
 
         <div className="flex justify-center">
           <AppDownloadCard
-            eyebrow="Desktop App"
-            title="Windows, macOS & Linux"
+            eyebrow="Desktop PC Bridge"
+            title="Windows · macOS · Linux"
             platforms={[
               {
                 id: 'windows',
                 label: 'Windows',
-                cta: 'Sao chép lệnh PowerShell',
-                meta: 'Windows 10 / 11 · PowerShell · Git + Python + Node.js',
+                cta: 'Tải bộ cài Windows (.bat)',
+                secondaryCta: 'Hoặc chép lệnh PowerShell',
+                meta: 'Windows 10 / 11 · .bat 1 chạm & PowerShell',
+                downloadUrl: '/cai-antigravity-pulse.bat',
+                downloadFileName: 'cai-antigravity-pulse.bat',
                 terminalLabel: 'PowerShell (Windows)',
                 terminalPrompt: 'PS>',
                 terminalCommand: WINDOWS_INSTALL_CMD,
+                steps: [
+                  { title: 'Bấm đúp file .bat', desc: 'Hoặc dán 1 dòng vào PowerShell' },
+                  { title: 'Tự cài mọi thứ', desc: 'Python, Node, Git & cloudflared' },
+                  { title: 'Mở ngoài Desktop', desc: 'Tự lấy mã 6 ký tự & link 1 chạm' },
+                ],
                 onDownload: () => {
-                  onNotify('Đã sao chép lệnh cài đặt Windows PowerShell — dán vào Terminal để cài!', 'success');
+                  onNotify('Đã tải cai-antigravity-pulse.bat & sao chép lệnh PowerShell!', 'success');
                 },
               },
               {
                 id: 'mac',
                 label: 'macOS',
-                cta: 'Sao chép lệnh Terminal',
-                meta: 'macOS 12+ (Apple Silicon & Intel) · zsh · Git + Python 3 + Node.js',
+                cta: 'Tải bộ cài macOS (.command)',
+                secondaryCta: 'Hoặc chép lệnh Terminal',
+                meta: 'macOS 12+ (Apple Silicon M1–M4 & Intel) · Tự tạo .app',
+                downloadUrl: '/cai-antigravity-pulse.command',
+                downloadFileName: 'cai-antigravity-pulse.command',
                 terminalLabel: 'Terminal (macOS · zsh)',
                 terminalPrompt: '$',
                 terminalCommand: MACOS_INSTALL_CMD,
+                steps: [
+                  { title: 'Tải hoặc chép lệnh', desc: 'Chạy file .command hoặc dán Terminal' },
+                  { title: 'Tự cài công cụ', desc: 'Python, Node, cloudflared & .app' },
+                  { title: 'Mở Antigravity.app', desc: 'Có sẵn trong Applications & Desktop' },
+                ],
                 onDownload: () => {
-                  onNotify('Đã sao chép lệnh cài đặt macOS Terminal — dán vào Terminal để cài!', 'success');
+                  onNotify('Đã tải cai-antigravity-pulse.command & sao chép lệnh Terminal!', 'success');
                 },
               },
               {
                 id: 'linux',
                 label: 'Linux',
-                cta: 'Linux · Đang phát triển',
-                meta: 'Dự kiến v1.0 · .deb · .AppImage · Flatpak',
-                badge: 'Đang phát triển',
-                comingSoon: true,
+                cta: 'Tải script Linux (install.sh)',
+                secondaryCta: 'Hoặc dùng ngay Web / PWA',
+                meta: 'Ubuntu · Debian · Fedora · Arch · Script Bash 1 dòng',
+                downloadUrl: '/install.sh',
+                downloadFileName: 'install.sh',
+                terminalLabel: 'Bash (Linux)',
+                terminalPrompt: '$',
+                terminalCommand: MACOS_INSTALL_CMD,
+                steps: [
+                  { title: 'Dán lệnh Bash', desc: 'Tự cài Python, Node, Git & cloudflared' },
+                  { title: 'Chạy ./start.sh', desc: 'Tự build & bật server cổng 8765' },
+                  { title: 'Quét QR / Mã 6 ký tự', desc: 'Kết nối điện thoại trong 3 giây' },
+                ],
                 onDownload: () => {
-                  if (canInstallPwa) triggerPwaInstall();
-                  onNotify('Bản cài đặt Linux (.deb / .AppImage) đang phát triển — bạn có thể dùng ngay bản Web/PWA!', 'info');
+                  onNotify('Đã tải install.sh & sao chép lệnh Bash cho Linux!', 'success');
                 },
               },
             ]}
@@ -1643,7 +1684,7 @@ export function SettingsPage({
         )}
       </section>
 
-      {/* Native Android & iOS Mobile App Hub */}
+      {/* Unified 4-Platform Install Center (Android, iOS, macOS, Windows) */}
       <section className="rounded-2xl border border-cyan-500/25 bg-white p-4 shadow-sm sm:p-5 dark:border-cyan-500/20 dark:bg-[#111827]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
@@ -1652,10 +1693,10 @@ export function SettingsPage({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Ứng dụng Di động Android &amp; iOS
+                Trung tâm Cài đặt Đa nền tảng (Android · iOS · macOS · Windows)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Chạy bản Native App (.apk / .ipa), cài PWA màn hình chính &amp; chuyển đổi máy chủ PC
+                Cài đặt Antigravity Pulse làm App trên điện thoại hoặc PC Bridge 1 chạm trên Windows &amp; macOS
               </p>
             </div>
           </div>
@@ -1709,34 +1750,39 @@ export function SettingsPage({
             </div>
           </div>
 
-          {/* Install / Download Buttons */}
+          {/* 4-Platform Install Grid: Android, iOS, macOS, Windows */}
           <div className="grid gap-2.5 sm:grid-cols-2">
+            {/* Android */}
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
                   🤖 Android (.apk &amp; PWA)
                 </span>
                 <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">
-                  {mobileBuilds?.android_apk_available ? 'Đã có file APK' : 'Capacitor Ready'}
+                  {mobileBuilds?.android_apk_available ? 'Đã có file APK' : 'APK + PWA Ready'}
                 </span>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                Cài đặt trực tiếp gói <code className="font-mono">Antigravity-Pulse.apk</code> hoặc cài nhanh qua Chrome 1 chạm.
+                Tải trực tiếp <code className="font-mono">Antigravity-Pulse-Android.apk</code> từ GitHub Releases hoặc cài nhanh bằng Chrome.
               </p>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                {mobileBuilds?.android_apk_available && (
-                  <button
-                    type="button"
-                    onClick={() => openExternalLink(api.getMobilePackageDownloadUrl('android'))}
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Tải Android APK{' '}
-                    {mobileBuilds.android_apk_size
-                      ? `(${formatBytes(mobileBuilds.android_apk_size)})`
-                      : ''}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    openExternalLink(
+                      mobileBuilds?.android_apk_available
+                        ? api.getMobilePackageDownloadUrl('android')
+                        : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest/download/Antigravity-Pulse-Android.apk'
+                    )
+                  }
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Tải Android APK{' '}
+                  {mobileBuilds?.android_apk_size
+                    ? `(${formatBytes(mobileBuilds.android_apk_size)})`
+                    : ''}
+                </button>
                 {canInstallPwa && (
                   <button
                     type="button"
@@ -1747,45 +1793,42 @@ export function SettingsPage({
                     className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-300"
                   >
                     <Download className="h-3.5 w-3.5" />
-                    Cài App ngay (1 chạm)
+                    Cài PWA 1 chạm
                   </button>
-                )}
-                {!mobileBuilds?.android_apk_available && !canInstallPwa && (
-                  <span className="text-[11px] text-slate-400">
-                    Chạy <code className="font-mono">.\build-mobile.ps1</code> hoặc GitHub Actions để xuất file <code className="font-mono">.apk</code>
-                  </span>
                 )}
               </div>
             </div>
 
+            {/* iOS */}
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
                   🍎 iOS — iPhone &amp; iPad (.ipa &amp; Safari)
                 </span>
                 <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300">
-                  {mobileBuilds?.ios_ipa_available ? 'Đã có file IPA' : 'Xcode + PWA Ready'}
+                  {mobileBuilds?.ios_ipa_available ? 'Đã có file IPA' : 'Safari PWA + IPA'}
                 </span>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
                 {isIosBrowser()
-                  ? 'Trên Safari iPhone: Nhấn biểu tượng Chia sẻ (Share) ở thanh dưới → Chọn "Thêm vào MH chính" (Add to Home Screen).'
-                  : 'Hỗ trợ cài file .ipa qua Sideloadly / AltStore / Xcode hoặc mở bằng Safari trên iPhone → "Thêm vào MH chính".'}
+                  ? 'Trên Safari iPhone: Nhấn Chia sẻ (↑) ở thanh dưới → Chọn "Thêm vào MH chính" (Add to Home Screen).'
+                  : 'Mở bằng Safari iPhone → Chia sẻ → Thêm vào MH chính, hoặc tải .ipa / Xcode từ Releases.'}
               </p>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                {mobileBuilds?.ios_ipa_available && (
-                  <button
-                    type="button"
-                    onClick={() => openExternalLink(api.getMobilePackageDownloadUrl('ios'))}
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Tải iOS IPA{' '}
-                    {mobileBuilds.ios_ipa_size
-                      ? `(${formatBytes(mobileBuilds.ios_ipa_size)})`
-                      : ''}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    openExternalLink(
+                      mobileBuilds?.ios_ipa_available
+                        ? api.getMobilePackageDownloadUrl('ios')
+                        : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest'
+                    )
+                  }
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {mobileBuilds?.ios_ipa_available ? 'Tải iOS IPA' : 'Mở iOS Releases (.ipa)'}
+                </button>
                 {mobileBuilds?.deep_link_pair_url && (
                   <button
                     type="button"
@@ -1793,9 +1836,85 @@ export function SettingsPage({
                     className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    Chép Deep Link (agypulse://)
+                    Chép Deep Link
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* macOS */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  🍏 macOS (Apple Silicon &amp; Intel)
+                </span>
+                <span className="rounded bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-600 dark:text-cyan-300">
+                  1-Click + .app
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                Tải file <code className="font-mono">.command</code> hoặc dán 1 dòng Terminal — tự tạo <strong>Antigravity Pulse.app</strong> &amp; chạy server trên Mac.
+              </p>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <a
+                  href="/cai-antigravity-pulse.command"
+                  download="cai-antigravity-pulse.command"
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Tải bộ cài macOS
+                </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleCopy(
+                      'lệnh cài macOS Terminal',
+                      'curl -fsSL https://agypulse.dpdns.org/install.sh | bash'
+                    )
+                  }
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Chép lệnh Terminal
+                </button>
+              </div>
+            </div>
+
+            {/* Windows */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  🪟 Windows 10 / 11 (PC 1 chạm)
+                </span>
+                <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-600 dark:text-sky-300">
+                  .bat + PowerShell
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                Tải file <code className="font-mono">cai-antigravity-pulse.bat</code> bấm đúp để tự cài Python, Node, cloudflared và tạo icon Desktop.
+              </p>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <a
+                  href="/cai-antigravity-pulse.bat"
+                  download="cai-antigravity-pulse.bat"
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-sky-500 px-3 text-xs font-semibold text-slate-950 hover:bg-sky-400"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Tải bộ cài Windows
+                </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleCopy(
+                      'lệnh cài Windows PowerShell',
+                      'irm https://agypulse.dpdns.org/install.ps1 | iex'
+                    )
+                  }
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Chép lệnh PS
+                </button>
               </div>
             </div>
           </div>

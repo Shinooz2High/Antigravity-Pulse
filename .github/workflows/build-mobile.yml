@@ -79,10 +79,12 @@ jobs:
             Xem hướng dẫn cài đặt chi tiết tại thư mục [`install/`](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/tree/main/install).
           files: |
             release-assets/Antigravity-Pulse-Android.apk
+            frontend/public/cai-antigravity-pulse.bat
+            frontend/public/cai-antigravity-pulse.command
           make_latest: true
 
   build-ios:
-    name: Build iOS Project (Xcode)
+    name: Build iOS Project & Unsigned IPA (Xcode)
     runs-on: macos-latest
     steps:
       - name: Checkout repository
@@ -107,7 +109,25 @@ jobs:
         working-directory: frontend
         run: npx cap copy ios
 
-      - name: Build Xcode Project (iOS Simulator / Unsigned)
+      - name: Build iOS App Bundle (Unsigned) & Package IPA
+        working-directory: frontend/ios/App
+        continue-on-error: true
+        run: |
+          mkdir -p build/DerivedData
+          xcodebuild -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          APP_BUNDLE="$(find build/DerivedData -name "App.app" -type d | head -n1)"
+          if [ -n "$APP_BUNDLE" ]; then
+            mkdir -p ../../../release-assets/Payload
+            cp -R "$APP_BUNDLE" ../../../release-assets/Payload/
+            (cd ../../../release-assets && zip -qr Antigravity-Pulse-iOS.ipa Payload && rm -rf Payload)
+          fi
+
+      - name: Build iOS Simulator Verification
         working-directory: frontend/ios/App
         continue-on-error: true
         run: |
@@ -118,11 +138,22 @@ jobs:
 
       - name: Zip iOS Xcode Project
         run: |
-          zip -r Antigravity-Pulse-iOS-Project.zip frontend/ios
+          mkdir -p release-assets
+          zip -qr release-assets/Antigravity-Pulse-iOS-Project.zip frontend/ios
 
-      - name: Upload iOS Xcode Project Artifact
+      - name: Upload iOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Antigravity-Pulse-iOS-Project
-          path: Antigravity-Pulse-iOS-Project.zip
+          name: Antigravity-Pulse-iOS-Package
+          path: release-assets/
           retention-days: 30
+
+      - name: Publish iOS Assets to GitHub Releases
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Antigravity Pulse (Latest Build)
+          files: |
+            release-assets/*
+          make_latest: true

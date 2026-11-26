@@ -1,6 +1,6 @@
-# Cài đặt Antigravity Pulse (Install Center)
+# Cài đặt Antigravity Pulse (Install Center — 4 Nền tảng)
 
-Hướng dẫn cài đặt nhanh **Antigravity Pulse** trên **Windows PC**, **Android** và **iOS**, cùng cách kết nối 1 chạm từ bất kỳ thiết bị nào qua **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)**.
+Hướng dẫn cài đặt nhanh **Antigravity Pulse** trên **Windows PC**, **macOS (Apple Silicon & Intel)**, **Android** và **iOS**, cùng cách kết nối 1 chạm từ bất kỳ thiết bị nào qua **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)**.
 
 ---
 
@@ -28,7 +28,26 @@ Bộ cài sẽ tự động làm toàn bộ:
 
 ---
 
-## 2. Kết nối từ PC khác (Chỉ điều khiển, không cần cài server)
+## 2. Cài đặt trên macOS (Apple Silicon M1–M4 & Intel) & Linux
+
+### Cách A: Cài tự động 1 chạm từ mạng (Khuyên dùng)
+1. **Không cần gõ lệnh (macOS):** Tải **[`cai-antigravity-pulse.command`](https://agypulse.dpdns.org/cai-antigravity-pulse.command)** về máy và bấm đúp (nếu Gatekeeper hỏi lần đầu: chuột phải → **Open**).
+2. **Dán 1 dòng vào Terminal (`zsh` / `bash`):**
+   ```bash
+   curl -fsSL https://agypulse.dpdns.org/install.sh | bash
+   ```
+
+Bộ cài tự động kiểm tra/cài **Python 3**, **Node.js**, **Git**, **`cloudflared`** (qua Homebrew trên macOS hoặc `apt-get`/`dnf`/`pacman` trên Linux), tải mã nguồn về `~/AntigravityPulse`, tạo **`~/Applications/Antigravity Pulse.app`** + **`~/Desktop/Antigravity Pulse.command`** trên macOS và khởi chạy `./start.sh`.
+
+### Cách B: Cài từ thư mục mã nguồn đã clone sẵn (Offline)
+```bash
+chmod +x install/install-mac.sh start.sh
+./install/install-mac.sh
+```
+
+---
+
+## 3. Kết nối từ PC / Mac khác (Chỉ điều khiển, không cần cài server)
 
 1. Mở trình duyệt (Chrome / Edge / Safari) trên PC kia.
 2. Bấm vào **Link gọn 1 chạm** được gửi từ PC chính (`https://agypulse.dpdns.org/?c=XXX-XXX`) — **tự đăng nhập luôn, không cần PIN hay IP**.
@@ -37,7 +56,7 @@ Bộ cài sẽ tự động làm toàn bộ:
 
 ---
 
-## 3. Cài đặt trên điện thoại Android
+## 4. Cài đặt trên điện thoại Android
 
 ### Cách A: Cài Web App (PWA) — Nhanh nhất (10 giây)
 1. Mở **Link gọn 1 chạm** (`https://agypulse.dpdns.org/?c=XXX-XXX`) gửi qua **Zalo / Messenger**, hoặc mở **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)** bằng trình duyệt **Chrome** rồi nhập **Mã 6 ký tự**.
@@ -46,7 +65,7 @@ Bộ cài sẽ tự động làm toàn bộ:
 
 ### Cách B: Cài file APK Native (Android)
 - **Tải trực tiếp APK mới nhất** từ trang Releases (tự động build bởi GitHub Actions):
-  👉 **[Tải Antigravity-Pulse-Android.apk (GitHub Releases)](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)**
+  👉 **[Tải Antigravity-Pulse-Android.apk (GitHub Releases)](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest/download/Antigravity-Pulse-Android.apk)**
 - Hoặc tải từ tab **[GitHub Actions → Build Antigravity Pulse Mobile](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/actions)** → chọn lần chạy mới nhất → tải mục **Artifacts (`Antigravity-Pulse-Android-Debug`)**.
 - Mở file `.apk` trên điện thoại và cho phép **Cài đặt từ nguồn không xác định** (*Install unknown apps*).
 - Sau khi mở app, nhập **Mã 6 ký tự** (hoặc quét QR / dán link ghép nối) là xong.
@@ -57,7 +76,7 @@ Bộ cài sẽ tự động làm toàn bộ:
 
 ---
 
-## 4. Cài đặt trên iPhone / iPad (iOS)
+## 5. Cài đặt trên iPhone / iPad (iOS)
 
 ### Cách A: Cài qua Safari (PWA) — Khuyên dùng, không cần máy Mac
 1. Mở **Link gọn 1 chạm** (`https://agypulse.dpdns.org/?c=XXX-XXX`) hoặc vào **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)** bằng trình duyệt **Safari**.
@@ -65,14 +84,13 @@ Bộ cài sẽ tự động làm toàn bộ:
 3. Cuộn xuống chọn **Thêm vào Màn hình chính** (*Add to Home Screen*) → nhấn **Thêm (Add)**.
 4. Mở **Antigravity Pulse** trực tiếp từ màn hình chính iPhone/iPad.
 
-### Cách B: Build ứng dụng Native qua Xcode (dành cho macOS)
-1. Tải mã nguồn hoặc artifact `Antigravity-Pulse-iOS-Project.zip` từ GitHub Actions.
-2. Mở dự án `frontend/ios/App/App.xcodeproj` (hoặc `App.xcworkspace`) bằng **Xcode**.
-3. Chọn thiết bị iPhone của bạn, cấu hình Signing Team và nhấn **Run (▶)** để cài trực tiếp lên máy.
+### Cách B: Cài file `.ipa` (Sideload) hoặc Build qua Xcode (macOS)
+1. Tải **`Antigravity-Pulse-iOS.ipa`** (bản unsigned cài qua AltStore / SideStore / Sideloadly) hoặc **`Antigravity-Pulse-iOS-Project.zip`** từ **[GitHub Releases](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)**.
+2. Nếu build trực tiếp từ Xcode trên máy Mac: mở `frontend/ios/App/App.xcodeproj` (hoặc `App.xcworkspace`), chọn thiết bị iPhone, cấu hình Signing Team và nhấn **Run (`▶`)**.
 
 ---
 
-## 5. Gỡ cài đặt (Uninstall)
+## 6. Gỡ cài đặt (Uninstall)
 
 ### Windows PC
 - **Cách A — Gỡ 1 chạm từ mạng (dành cho bản cài qua `agypulse.dpdns.org`):**
@@ -89,6 +107,11 @@ Bộ cài sẽ tự động làm toàn bộ:
   ```
   - Thêm `-KeepData` nếu muốn giữ lại `backend\data` và `.env`.
   - Thêm `-RemoveCloudflared` nếu muốn gỡ luôn `cloudflared`.
+
+### macOS / Linux
+```bash
+rm -rf ~/AntigravityPulse ~/Applications/"Antigravity Pulse.app" ~/Desktop/"Antigravity Pulse.command"
+```
 
 ### Android
 - **App APK / PWA:** Nhấn giữ biểu tượng **Antigravity Pulse** trên màn hình chính → chọn **Gỡ cài đặt** (*Uninstall*).
@@ -108,6 +131,9 @@ Bộ cài sẽ tự động làm toàn bộ:
 | --- | --- | --- |
 | `cai-antigravity-pulse.bat` | `frontend/public/` ([tải online](https://agypulse.dpdns.org/cai-antigravity-pulse.bat)) | File `.bat` bấm đúp để tải & cài 1 chạm trên bất kỳ Windows PC nào. |
 | `install.ps1` | `frontend/public/` ([script online](https://agypulse.dpdns.org/install.ps1)) | Script PowerShell cài tự động 1 dòng (`irm https://agypulse.dpdns.org/install.ps1 \| iex`). |
+| `cai-antigravity-pulse.command` | `frontend/public/` ([tải online](https://agypulse.dpdns.org/cai-antigravity-pulse.command)) | File `.command` bấm đúp cài đặt 1 chạm trên macOS. |
+| `install.sh` | `frontend/public/` ([script online](https://agypulse.dpdns.org/install.sh)) | Script Bash cài tự động 1 dòng cho macOS & Linux (`curl -fsSL https://agypulse.dpdns.org/install.sh \| bash`), tạo `.app` & shortcut Desktop. |
+| `install-mac.sh` | `install/` | Bộ cài đặt dành cho macOS / Linux gọi lại hoặc chạy cục bộ từ repo. |
 | `go-antigravity-pulse.bat` | `frontend/public/` ([tải online](https://agypulse.dpdns.org/go-antigravity-pulse.bat)) | File `.bat` bấm đúp để gỡ cài đặt 1 chạm trên Windows PC. |
 | `uninstall.ps1` | `frontend/public/` ([script online](https://agypulse.dpdns.org/uninstall.ps1)) | Script PowerShell gỡ cài đặt 1 dòng (`irm https://agypulse.dpdns.org/uninstall.ps1 \| iex`). |
 | `install-pc.bat` / `install-pc.ps1` | `install/` | Bộ cài offline trên Windows khi đã tải sẵn mã nguồn. |

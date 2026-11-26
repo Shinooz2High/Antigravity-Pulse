@@ -469,3 +469,43 @@ def test_memories_notes_and_installed_agents_status(
     assert isinstance(agents, list)
     agent_ids = {a["id"] for a in agents}
     assert {"agy", "claude_code", "codex", "opencode"}.issubset(agent_ids)
+
+
+def test_cross_platform_installer_assets_served(tmp_path) -> None:
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    (dist_dir / "index.html").write_text("<html><body>ok</body></html>", encoding="utf-8")
+    (dist_dir / "install.ps1").write_text("Write-Host 'win'\n", encoding="utf-8")
+    (dist_dir / "install.sh").write_text("#!/usr/bin/env bash\necho mac\n", encoding="utf-8")
+    (dist_dir / "cai-antigravity-pulse.bat").write_text("@echo off\r\n", encoding="utf-8")
+    (dist_dir / "cai-antigravity-pulse.command").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+
+    cfg = AppConfig(
+        _env_file=None,
+        AGY_DATA_DIR=str(tmp_path / "data"),
+        AGY_FRONTEND_DIST=str(dist_dir),
+    )
+    app = create_app(cfg, start_watcher=False)
+    with TestClient(app) as tc:
+        r_ps1 = tc.get("/install.ps1")
+        assert r_ps1.status_code == 200
+        assert "text/plain" in r_ps1.headers.get("content-type", "")
+        assert "no-cache" in r_ps1.headers.get("cache-control", "")
+
+        r_sh = tc.get("/install.sh")
+        assert r_sh.status_code == 200
+        assert "text/plain" in r_sh.headers.get("content-type", "")
+
+        r_bat = tc.get("/cai-antigravity-pulse.bat")
+        assert r_bat.status_code == 200
+        assert "attachment" in r_bat.headers.get("content-disposition", "")
+
+        r_cmd = tc.get("/cai-antigravity-pulse.command")
+        assert r_cmd.status_code == 200
+        assert "attachment" in r_cmd.headers.get("content-disposition", "")
+
+        r_missing_apk = tc.get("/missing-build.apk")
+        assert r_missing_apk.status_code == 404

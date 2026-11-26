@@ -1050,6 +1050,7 @@ export default function App() {
             defaultEngine={defaultEngine}
             defaultPolicy={defaultPolicy}
             currentModel={currentModel}
+            systemStatus={systemStatus}
             isDark={isDark}
             onSelectProject={setSelectedProjectId}
             onSelectRun={handleSelectRunInConversation}

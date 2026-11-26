@@ -1,5 +1,11 @@
-// Lucian UX/UI Prompt #393 · Platform App Download Card (Windows CLI / macOS / Linux / Mobile)
+// Unified 4-Platform App Download & Installer Card (Android / iOS / macOS / Windows)
 import { useEffect, useRef, useState } from 'react';
+import {
+  isNativeApp,
+  openExternalLink,
+  subscribePwaInstallAvailability,
+  triggerPwaInstall,
+} from '../../lib/native';
 import { copyToClipboard } from '../../lib/utils';
 import './AppDownloadCard.css';
 
@@ -7,13 +13,19 @@ export interface DownloadPlatformOption {
   id: 'android' | 'ios' | 'mac' | 'windows' | 'linux';
   label: string;
   cta: string;
+  secondaryCta?: string;
   meta: string;
   badge?: string;
   comingSoon?: boolean;
+  downloadUrl?: string;
+  downloadFileName?: string;
+  secondaryUrl?: string;
   terminalCommand?: string;
   terminalLabel?: string;
   terminalPrompt?: string;
+  steps?: Array<{ title: string; desc: string }>;
   onDownload?: () => void;
+  onSecondaryAction?: () => void;
 }
 
 export interface AppDownloadCardProps {
@@ -23,64 +35,105 @@ export interface AppDownloadCardProps {
   className?: string;
 }
 
-export const WINDOWS_INSTALL_CMD =
-  'git clone https://github.com/Shinooz2High/App-Antigravity-on-moblie-.git Antigravity-Pulse; cd Antigravity-Pulse; .\\start.ps1';
+export const GITHUB_LATEST_RELEASE_URL =
+  'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest';
+export const ANDROID_APK_URL =
+  'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest/download/Antigravity-Pulse-Android.apk';
+export const WINDOWS_INSTALL_CMD = 'irm https://agypulse.dpdns.org/install.ps1 | iex';
+export const MACOS_INSTALL_CMD = 'curl -fsSL https://agypulse.dpdns.org/install.sh | bash';
 
-export const MACOS_INSTALL_CMD =
-  'git clone https://github.com/Shinooz2High/App-Antigravity-on-moblie-.git Antigravity-Pulse && cd Antigravity-Pulse && chmod +x start.sh && ./start.sh';
+function triggerFileDownload(url: string, filename?: string): void {
+  if (typeof window === 'undefined') return;
+  if (isNativeApp()) {
+    openExternalLink(url);
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  if (filename) a.download = filename;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 const DEFAULT_PLATFORMS: DownloadPlatformOption[] = [
   {
-    id: 'windows',
-    label: 'Windows',
-    cta: 'Sao chép lệnh PowerShell',
-    meta: 'Windows 10 / 11 · PowerShell · Git + Python + Node.js',
-    terminalLabel: 'PowerShell (Windows)',
-    terminalPrompt: 'PS>',
-    terminalCommand: WINDOWS_INSTALL_CMD,
+    id: 'android',
+    label: 'Android',
+    cta: 'Tải Android APK (.apk)',
+    secondaryCta: 'Hoặc xem mọi bản phát hành',
+    meta: 'Android 8.0+ · APK Native (Capacitor 8) & Chrome PWA',
+    downloadUrl: ANDROID_APK_URL,
+    downloadFileName: 'Antigravity-Pulse-Android.apk',
+    secondaryUrl: GITHUB_LATEST_RELEASE_URL,
+    steps: [
+      { title: 'Tải file .apk', desc: 'Nhấn nút tải hoặc mở bản Releases' },
+      { title: 'Cho phép cài đặt', desc: 'Bật Nguồn không xác định nếu hỏi' },
+      { title: 'Nhập mã 6 ký tự', desc: 'Hoặc bấm link Zalo / Messenger' },
+    ],
+  },
+  {
+    id: 'ios',
+    label: 'iOS',
+    cta: 'Cài lên MH chính (Safari PWA)',
+    secondaryCta: 'Tải gói iOS (.ipa / Xcode)',
+    meta: 'iPhone & iPad (iOS 15+) · Không cần máy Mac với PWA',
+    secondaryUrl: GITHUB_LATEST_RELEASE_URL,
+    steps: [
+      { title: 'Mở bằng Safari', desc: 'Truy cập agypulse.dpdns.org' },
+      { title: 'Bấm Chia sẻ (↑)', desc: 'Ở thanh dưới cùng trình duyệt' },
+      { title: 'Thêm vào MH chính', desc: 'Dùng toàn màn hình như App gốc' },
+    ],
   },
   {
     id: 'mac',
     label: 'macOS',
-    cta: 'Sao chép lệnh Terminal',
-    meta: 'macOS 12+ (Apple Silicon & Intel) · zsh · Git + Python 3 + Node.js',
-    terminalLabel: 'Terminal (macOS · zsh)',
+    cta: 'Tải bộ cài macOS (.command)',
+    secondaryCta: 'Hoặc cài App vào Dock (PWA)',
+    meta: 'macOS 12+ (Apple Silicon M1–M4 & Intel) · Tự tạo .app & Desktop',
+    downloadUrl: '/cai-antigravity-pulse.command',
+    downloadFileName: 'cai-antigravity-pulse.command',
+    terminalLabel: 'Terminal (macOS · zsh / bash)',
     terminalPrompt: '$',
     terminalCommand: MACOS_INSTALL_CMD,
+    steps: [
+      { title: 'Tải hoặc chép lệnh', desc: 'Chạy file .command hoặc dán Terminal' },
+      { title: 'Tự cài công cụ', desc: 'Python, Node, cloudflared & shortcut' },
+      { title: 'Mở ngoài Desktop', desc: 'Bấm đúp Antigravity Pulse.app' },
+    ],
   },
   {
-    id: 'linux',
-    label: 'Linux',
-    cta: 'Linux · Đang phát triển',
-    meta: 'Dự kiến v1.0 · .deb · .AppImage · Flatpak',
-    badge: 'Đang phát triển',
-    comingSoon: true,
+    id: 'windows',
+    label: 'Windows',
+    cta: 'Tải bộ cài Windows (.bat)',
+    secondaryCta: 'Chép lệnh PowerShell 1 dòng',
+    meta: 'Windows 10 / 11 · Cài 1 chạm qua winget & tạo icon Desktop',
+    downloadUrl: '/cai-antigravity-pulse.bat',
+    downloadFileName: 'cai-antigravity-pulse.bat',
+    terminalLabel: 'PowerShell (Windows)',
+    terminalPrompt: 'PS>',
+    terminalCommand: WINDOWS_INSTALL_CMD,
+    steps: [
+      { title: 'Bấm đúp file .bat', desc: 'Hoặc dán 1 dòng vào PowerShell' },
+      { title: 'Tự cài mọi thứ', desc: 'Python, Node, Git & cloudflared' },
+      { title: 'Lấy mã 6 ký tự', desc: 'Lần sau mở icon ngoài Desktop' },
+    ],
   },
 ];
 
-const STEPS = [
-  { title: 'Mở tệp cài đặt', desc: 'Chạy tệp vừa tải về máy' },
-  { title: 'Cài đặt nhanh', desc: 'Chỉ vài cú nhấn là hoàn tất' },
-  { title: 'Ghép nối PC', desc: 'Quét QR hoặc nhập mã PIN' },
-];
+function detectCurrentPlatformId(): DownloadPlatformOption['id'] {
+  if (typeof navigator === 'undefined') return 'windows';
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const maxTouch = (navigator as unknown as { maxTouchPoints?: number }).maxTouchPoints || 0;
 
-const TERMINAL_STEPS = [
-  { title: 'Mở PowerShell', desc: 'Nhấn Win + X → chọn Terminal' },
-  { title: 'Dán & nhấn Enter', desc: 'Tự động tải repo & cài gói' },
-  { title: 'Tự khởi chạy', desc: 'Chạy start.ps1 và mở Web App' },
-];
-
-const MACOS_TERMINAL_STEPS = [
-  { title: 'Mở Terminal', desc: 'Nhấn ⌘ + Space → gõ Terminal' },
-  { title: 'Dán & nhấn Enter', desc: 'Tự động tải repo & cài gói' },
-  { title: 'Tự khởi chạy', desc: 'Chạy ./start.sh và mở Web App' },
-];
-
-const DEV_STEPS = [
-  { title: 'Đóng gói Native', desc: 'Tối ưu Electron / Tauri nhẹ máy' },
-  { title: 'Tự động cập nhật', desc: 'Đồng bộ giao diện & custom theme' },
-  { title: 'Dùng Web App ngay', desc: 'Cài PWA hoặc truy cập trình duyệt' },
-];
+  if (/Android/i.test(ua)) return 'android';
+  if (/iPhone|iPad|iPod/i.test(ua) || (/MacIntel/i.test(platform) && maxTouch > 1)) return 'ios';
+  if (/Mac/i.test(ua) || /Mac/i.test(platform)) return 'mac';
+  return 'windows';
+}
 
 function PlatformIcon({ id }: { id: DownloadPlatformOption['id'] }) {
   if (id === 'android') {
@@ -133,25 +186,22 @@ function PlatformIcon({ id }: { id: DownloadPlatformOption['id'] }) {
 }
 
 export function AppDownloadCard({
-  eyebrow = 'Desktop App',
-  title = 'Cài trên Windows, macOS & Linux',
+  eyebrow = 'Cài đặt Đa nền tảng',
+  title = 'Android · iOS · macOS · Windows',
   platforms = DEFAULT_PLATFORMS,
   className = '',
 }: AppDownloadCardProps) {
+  const detectedId = detectCurrentPlatformId();
   const [selectedIndex, setSelectedIndex] = useState(() => {
-    if (typeof navigator === 'undefined') return 0;
-    const ua = navigator.userAgent || '';
-    const winIdx = platforms.findIndex((p) => p.id === 'windows');
-    const macIdx = platforms.findIndex((p) => p.id === 'mac');
-    const linIdx = platforms.findIndex((p) => p.id === 'linux');
-    if (/Win/.test(ua) && winIdx >= 0) return winIdx;
-    if (/Linux|X11/.test(ua) && !/Android/.test(ua) && linIdx >= 0) return linIdx;
-    if (macIdx >= 0) return macIdx;
-    return 0;
+    const idx = platforms.findIndex((p) => p.id === detectedId);
+    return idx >= 0 ? idx : 0;
   });
-  const [downloaded, setDownloaded] = useState(false);
-  const [activeStepCount, setActiveStepCount] = useState(0);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [canInstallPwa, setCanInstallPwa] = useState(false);
+  const [activeStepCount, setActiveStepCount] = useState(3);
   const timersRef = useRef<number[]>([]);
+
+  useEffect(() => subscribePwaInstallAvailability(setCanInstallPwa), []);
 
   const clearTimers = () => {
     timersRef.current.forEach((id) => window.clearTimeout(id));
@@ -164,57 +214,120 @@ export function AppDownloadCard({
     if (idx === selectedIndex) return;
     clearTimers();
     setSelectedIndex(idx);
-    setDownloaded(false);
-    setActiveStepCount(0);
+    setStatusMsg(null);
+    setActiveStepCount(3);
   };
 
   const current = platforms[selectedIndex] || platforms[0];
-  const activeSteps = current.terminalCommand
-    ? current.id === 'mac'
-      ? MACOS_TERMINAL_STEPS
-      : TERMINAL_STEPS
-    : current.comingSoon
-      ? DEV_STEPS
-      : STEPS;
+  const activeSteps = current.steps || [
+    { title: 'Mở bộ cài', desc: 'Tải về hoặc dán lệnh cài' },
+    { title: 'Hoàn tất nhanh', desc: 'Chỉ mất khoảng 30 giây' },
+    { title: 'Kết nối PC', desc: 'Nhập mã 6 ký tự hoặc bấm link' },
+  ];
 
-  const handleAction = async () => {
-    if (current.terminalCommand) {
-      await copyToClipboard(current.terminalCommand);
-    }
-    if (downloaded && !current.terminalCommand) return;
-
+  const animateSteps = () => {
     clearTimers();
-    setDownloaded(true);
-    setActiveStepCount(0);
-    current.onDownload?.();
-
     const reducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
     if (reducedMotion) {
       setActiveStepCount(activeSteps.length);
       return;
     }
-
+    setActiveStepCount(0);
     activeSteps.forEach((_, idx) => {
       const id = window.setTimeout(() => {
         setActiveStepCount(idx + 1);
-      }, 280 + idx * 360);
+      }, 180 + idx * 240);
       timersRef.current.push(id);
     });
   };
 
+  const handlePrimaryAction = async () => {
+    animateSteps();
+    if (current.onDownload) {
+      current.onDownload();
+    }
+
+    if (current.downloadUrl) {
+      if (current.terminalCommand) {
+        await copyToClipboard(current.terminalCommand);
+      }
+      triggerFileDownload(current.downloadUrl, current.downloadFileName);
+      setStatusMsg(
+        current.terminalCommand
+          ? `Đã tải ${current.downloadFileName || 'bộ cài'} & chép sẵn lệnh!`
+          : 'Đang tải xuống gói cài đặt...'
+      );
+      return;
+    }
+
+    if (current.id === 'ios') {
+      if (canInstallPwa) {
+        const ok = await triggerPwaInstall();
+        if (ok) {
+          setStatusMsg('Đã thêm ứng dụng lên Màn hình chính!');
+          return;
+        }
+      }
+      setStatusMsg('Trên Safari: bấm Chia sẻ (↑) → Thêm vào Màn hình chính');
+      return;
+    }
+
+    if (current.terminalCommand) {
+      await copyToClipboard(current.terminalCommand);
+      setStatusMsg('Đã sao chép lệnh cài đặt!');
+    }
+  };
+
+  const handleCopyTerminal = async () => {
+    if (!current.terminalCommand) return;
+    await copyToClipboard(current.terminalCommand);
+    animateSteps();
+    setStatusMsg('Đã sao chép lệnh vào khay nhớ tạm!');
+  };
+
+  const handleSecondary = async () => {
+    if (current.onSecondaryAction) {
+      current.onSecondaryAction();
+      return;
+    }
+    if (current.id === 'android' && canInstallPwa) {
+      const ok = await triggerPwaInstall();
+      if (ok) {
+        setStatusMsg('Đã cài Web App lên màn hình chính Android!');
+        return;
+      }
+    }
+    if ((current.id === 'mac' || current.id === 'windows') && canInstallPwa && !current.secondaryUrl) {
+      const ok = await triggerPwaInstall();
+      if (ok) {
+        setStatusMsg('Đã cài đặt Desktop App (PWA)!');
+        return;
+      }
+    }
+    if (current.id === 'windows' && current.terminalCommand) {
+      await copyToClipboard(current.terminalCommand);
+      setStatusMsg('Đã chép lệnh PowerShell — mở PowerShell và Ctrl+V!');
+      return;
+    }
+    if (current.secondaryUrl) {
+      openExternalLink(current.secondaryUrl);
+      return;
+    }
+    if (current.terminalCommand) {
+      await copyToClipboard(current.terminalCommand);
+      setStatusMsg('Mở Safari/Chrome → Cài đặt ứng dụng (hoặc dán Terminal)!');
+    }
+  };
+
   return (
-    <div className={`u393-wrap ${downloaded ? 'is-got' : ''} ${className}`.trim()}>
+    <div className={`u393-wrap ${statusMsg ? 'is-got' : ''} ${className}`.trim()}>
       <div className="u393-tp">
-        <div className="flex flex-wrap items-center justify-center gap-y-1">
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           <small>{eyebrow}</small>
-          {current.badge && (
-            <span className="u393-dev-pill">
-              <i aria-hidden="true" />
-              {current.badge}
-            </span>
+          {current.id === detectedId && (
+            <span className="u393-cur-pill">Thiết bị này</span>
           )}
         </div>
         <h3>{title}</h3>
@@ -252,7 +365,6 @@ export function AppDownloadCard({
         ))}
       </div>
 
-      {/* Terminal Install Snippet (Windows PowerShell) */}
       {current.terminalCommand && (
         <div key={`${current.id}-term`} className="u393-term">
           <div className="u393-term-hd">
@@ -267,11 +379,11 @@ export function AppDownloadCard({
             role="button"
             tabIndex={0}
             title="Bấm để sao chép lệnh cài đặt"
-            onClick={handleAction}
+            onClick={handleCopyTerminal}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                handleAction();
+                handleCopyTerminal();
               }
             }}
             className="u393-term-body"
@@ -285,11 +397,11 @@ export function AppDownloadCard({
       <div>
         <button
           type="button"
-          onClick={handleAction}
-          className={`u393-dl ${downloaded ? 'is-ok' : current.comingSoon ? 'is-dev' : ''}`.trim()}
+          onClick={handlePrimaryAction}
+          className={`u393-dl ${statusMsg ? 'is-ok' : ''}`.trim()}
         >
-          <span key={`${current.id}-${downloaded ? 'ok' : 'idle'}`} className="u393-sw">
-            {downloaded ? (
+          <span key={`${current.id}-${statusMsg ? 'ok' : 'idle'}`} className="u393-sw">
+            {statusMsg ? (
               <>
                 <svg viewBox="0 0 18 18" aria-hidden="true">
                   <path
@@ -301,13 +413,7 @@ export function AppDownloadCard({
                     strokeLinejoin="round"
                   />
                 </svg>
-                <span>
-                  {current.terminalCommand
-                    ? 'Đã sao chép lệnh cài đặt'
-                    : current.comingSoon
-                      ? 'Đang phát triển · Dùng bản Web'
-                      : 'Đã bắt đầu tải xuống'}
-                </span>
+                <span>{statusMsg}</span>
               </>
             ) : (
               <>
@@ -317,6 +423,20 @@ export function AppDownloadCard({
             )}
           </span>
         </button>
+
+        {(current.secondaryCta || (current.id === 'android' && canInstallPwa)) && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={handleSecondary}
+              className="u393-sec-btn"
+            >
+              {current.id === 'android' && canInstallPwa
+                ? 'Cài nhanh Web App (PWA 1 chạm)'
+                : current.secondaryCta}
+            </button>
+          </div>
+        )}
       </div>
 
       <div key={current.id} className="u393-mt">
@@ -327,35 +447,13 @@ export function AppDownloadCard({
         {activeSteps.map((step, idx) => (
           <div
             key={step.title}
-            className={`u393-sp ${idx < activeStepCount || current.comingSoon || current.terminalCommand ? 'is-on' : ''}`.trim()}
+            className={`u393-sp ${idx < activeStepCount ? 'is-on' : ''}`.trim()}
           >
             <i>{idx + 1}</i>
             <b>{step.title}</b>
             <small>{step.desc}</small>
           </div>
         ))}
-      </div>
-
-      <div className="u393-ar" aria-hidden="true">
-        <svg viewBox="0 0 26 26">
-          <path
-            d="M5 21L20 6M11 6h9v9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span>
-          {current.terminalCommand
-            ? current.id === 'mac'
-              ? 'Dán Terminal'
-              : 'Dán vào PS'
-            : current.comingSoon
-              ? 'Sắp ra mắt'
-              : 'Mở ở đây'}
-        </span>
       </div>
     </div>
   );

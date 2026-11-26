@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Activity,
+  Brain,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -9,8 +9,11 @@ import {
   Download,
   FolderGit2,
   FolderPlus,
+  Layers,
+  Maximize2,
   Menu,
-  Minus,
+  MessageSquare,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -19,7 +22,7 @@ import {
   Search,
   Settings,
   Sparkles,
-  Square,
+  Sun,
   X,
   Zap,
 } from 'lucide-react';
@@ -86,7 +89,9 @@ export function Layout({
   wsStatus,
   onReconnectWs,
   systemStatus,
+  pendingApprovalCount,
   activeRunCount,
+  isDark,
   onToggleTheme,
   projects = [],
   selectedProjectId = '',
@@ -134,6 +139,39 @@ export function Layout({
   const [fileEntryMap, setFileEntryMap] = useState<Record<string, FileEntry>>({});
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loadingRootTree, setLoadingRootTree] = useState(false);
+
+  useEffect(() => {
+    const closeMenus = () => {
+      setActiveMenu(null);
+      setProjectDropdownOpen(false);
+    };
+    let wasDesktop = typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
+    const onResize = () => {
+      const isDesktop = window.innerWidth >= 768;
+      if (wasDesktop && !isDesktop) {
+        setSidebarOpen(false);
+        setAuxPaneOpen(false);
+      } else if (!wasDesktop && isDesktop) {
+        setSidebarOpen(true);
+      }
+      wasDesktop = isDesktop;
+    };
+    window.addEventListener('click', closeMenus);
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('click', closeMenus);
+      window.removeEventListener('resize', onResize);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => undefined);
+    } else {
+      document.exitFullscreen?.().catch(() => undefined);
+    }
+  };
 
   const closeSidebarOnMobile = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -328,18 +366,18 @@ export function Layout({
   }, [projects, runs, conversations, onNewConversation, onSelectConversation, onSelectProject, onSelectRun, onTabChange, playTaskVoice, setThemeModalOpen]);
 
   return (
-    <div className="agy-app-shell flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden text-slate-100 select-none">
+    <div className="agy-app-shell flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden bg-[#f4f7fb] text-slate-900 dark:bg-[#090d16] dark:text-slate-100 select-none">
       {/* ============================================================== */}
       {/* ANTIGRAVITY 2.0 DESKTOP TITLEBAR (Mobile Safe-Area Ready)      */}
       {/* ============================================================== */}
-      <header className="agy-glass-header pt-safe relative z-30 flex min-h-[46px] shrink-0 items-center justify-between gap-1.5 border-b border-white/10 bg-[#090b14]/85 px-2 backdrop-blur-xl sm:px-3 md:min-h-[40px] md:h-10 text-xs">
-        {/* Left: Window Controls, Menu Bar, Project Selector */}
+      <header className="agy-glass-header pt-safe relative z-30 flex min-h-[46px] shrink-0 items-center justify-between gap-1.5 border-b border-slate-200/80 bg-white/90 px-2 backdrop-blur-xl sm:px-3 md:min-h-[42px] md:h-[42px] text-xs dark:border-white/10 dark:bg-[#090b14]/85">
+        {/* Left: Menu Button, Logo, Desktop Menus, Project Selector */}
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           {/* Sidebar Toggle Button (Prominent first on mobile) */}
           <button
             type="button"
             onClick={() => setSidebarOpen((prev) => !prev)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:hidden"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 md:hidden dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
             title="Đóng / mở menu"
             aria-label="Đóng / mở menu"
           >
@@ -365,28 +403,179 @@ export function Layout({
           </button>
 
           {/* Antigravity Desktop Menu Bar */}
-          <div className="hidden lg:flex items-center gap-0.5 font-medium text-slate-300">
-            {['Antigravity', 'Workspace', 'View', 'Window'].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setActiveMenu(activeMenu === item ? null : item)}
-                className={cn(
-                  'rounded px-2 py-1 text-[11px] transition hover:bg-white/10 hover:text-white',
-                  activeMenu === item && 'bg-white/15 text-white'
+          <div
+            className="hidden lg:flex items-center gap-0.5 font-medium text-slate-600 dark:text-slate-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(['Antigravity', 'Workspace', 'View'] as const).map((item) => (
+              <div key={item} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setActiveMenu(activeMenu === item ? null : item)}
+                  className={cn(
+                    'rounded px-2 py-1 text-[11px] transition hover:bg-slate-200/70 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-white',
+                    activeMenu === item && 'bg-slate-200 text-slate-900 dark:bg-white/15 dark:text-white'
+                  )}
+                >
+                  {item}
+                </button>
+
+                {activeMenu === item && (
+                  <div className="absolute left-0 top-full mt-1.5 w-52 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-2xl backdrop-blur-2xl z-50 dark:border-white/15 dark:bg-[#0f1424]/95">
+                    {item === 'Antigravity' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleStartNewConversation();
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Plus className="h-3.5 w-3.5 text-cyan-500" />
+                          <span>Cuộc trò chuyện mới</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDownloadModalOpen(true);
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Download className="h-3.5 w-3.5 text-emerald-500" />
+                          <span>Tải &amp; Cài App (4 nền tảng)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onTabChange('settings');
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Settings className="h-3.5 w-3.5 text-indigo-400" />
+                          <span>Cài đặt hệ thống</span>
+                        </button>
+                      </>
+                    )}
+
+                    {item === 'Workspace' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onTabChange('projects');
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Code2 className="h-3.5 w-3.5 text-cyan-500" />
+                          <span>Mở Pocket IDE</span>
+                        </button>
+                        {onCreateProject && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCreateProjectError(null);
+                              setCreateProjectModalOpen(true);
+                              setActiveMenu(null);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                          >
+                            <FolderPlus className="h-3.5 w-3.5 text-emerald-500" />
+                            <span>Thêm dự án mới</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onTabChange('outputs');
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Brain className="h-3.5 w-3.5 text-purple-400" />
+                          <span>Kho Kết quả &amp; Brain</span>
+                        </button>
+                      </>
+                    )}
+
+                    {item === 'View' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onToggleTheme();
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          {isDark ? (
+                            <Sun className="h-3.5 w-3.5 text-amber-400" />
+                          ) : (
+                            <Moon className="h-3.5 w-3.5 text-indigo-500" />
+                          )}
+                          <span>{isDark ? 'Chuyển nền Sáng' : 'Chuyển nền Tối'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setThemeModalOpen(true);
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-pink-400" />
+                          <span>Custom Theme Studio</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSidebarOpen((p) => !p);
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <PanelLeftOpen className="h-3.5 w-3.5 text-cyan-400" />
+                          <span>Ẩn / Hiện thanh bên</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuxPaneOpen((p) => !p);
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <PanelRightOpen className="h-3.5 w-3.5 text-indigo-400" />
+                          <span>Ẩn / Hiện Panel phải</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toggleFullscreen();
+                            setActiveMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                        >
+                          <Maximize2 className="h-3.5 w-3.5 text-slate-400" />
+                          <span>Toàn màn hình</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
-              >
-                {item}
-              </button>
+              </div>
             ))}
           </div>
 
           {/* Navigation Arrows */}
-          <div className="hidden sm:flex items-center gap-0.5 pl-1 text-slate-400">
+          <div className="hidden sm:flex items-center gap-0.5 pl-1 text-slate-500 dark:text-slate-400">
             <button
               type="button"
               onClick={() => window.history.back()}
-              className="rounded p-1 hover:bg-white/10 hover:text-slate-200"
+              className="rounded p-1 hover:bg-slate-200/70 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-slate-200"
               title="Quay lại"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -394,7 +583,7 @@ export function Layout({
             <button
               type="button"
               onClick={() => window.history.forward()}
-              className="rounded p-1 hover:bg-white/10 hover:text-slate-200"
+              className="rounded p-1 hover:bg-slate-200/70 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-slate-200"
               title="Tiếp theo"
             >
               <ChevronRight className="h-3.5 w-3.5" />
@@ -405,7 +594,7 @@ export function Layout({
           <button
             type="button"
             onClick={() => setSidebarOpen((prev) => !prev)}
-            className="hidden md:flex rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
+            className="hidden md:flex rounded p-1 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
             title="Đóng / mở thanh bên"
           >
             {sidebarOpen ? (
@@ -416,24 +605,24 @@ export function Layout({
           </button>
 
           {/* Project Selector Trigger */}
-          <div className="relative min-w-0">
+          <div className="relative min-w-0" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               data-testid="project-selector-trigger"
               onClick={() => setProjectDropdownOpen((o) => !o)}
-              className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 md:py-0.5 text-[11px] font-semibold text-slate-200 transition hover:bg-white/10 hover:border-white/20"
+              className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-100/80 px-2 py-1 md:py-0.5 text-[11px] font-semibold text-slate-800 transition hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:border-white/20"
             >
-              <FolderGit2 className="h-3 w-3 shrink-0 text-cyan-400" />
+              <FolderGit2 className="h-3 w-3 shrink-0 text-cyan-500 dark:text-cyan-400" />
               <span className="max-w-[92px] sm:max-w-[120px] truncate">{selectedProject?.name || 'App'}</span>
               <ChevronDown className="h-2.5 w-2.5 shrink-0 opacity-60" />
             </button>
 
             {projectDropdownOpen && (
               <div
-                className="absolute left-0 top-full mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-[#0f1424]/95 p-1 shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150"
+                className="absolute left-0 top-full mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white/95 p-1 shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150 dark:border-white/15 dark:bg-[#0f1424]/95"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Chọn Workspace PC
                 </div>
                 {projects.map((p) => (
@@ -447,12 +636,12 @@ export function Layout({
                     className={cn(
                       'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition',
                       p.id === selectedProject?.id
-                        ? 'bg-cyan-500/20 text-cyan-300 font-semibold'
-                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                        ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
                     )}
                   >
                     <span className="truncate">{p.name}</span>
-                    {p.id === selectedProject?.id && <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400" />}
+                    {p.id === selectedProject?.id && <CheckCircle2 className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400" />}
                   </button>
                 ))}
               </div>
@@ -469,18 +658,30 @@ export function Layout({
           />
         </div>
 
-        {/* Right: Mobile Search, Custom Theme, Aux Pane, Mode, Window Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Right: Mobile Search, Custom Theme, Download, Aux Pane, Theme Toggle, Fullscreen */}
+        <div className="flex items-center gap-1 sm:gap-1.5">
           {/* Mobile Search Trigger */}
           <button
             type="button"
             onClick={() => setMobileSearchOpen(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white md:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 md:hidden dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
             title="Tìm kiếm lệnh & dự án"
             aria-label="Tìm kiếm lệnh & dự án"
           >
             <Search className="h-4 w-4" />
           </button>
+
+          {/* Install / Download App Trigger */}
+          <button
+            type="button"
+            onClick={() => setDownloadModalOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+            title="Tải & Cài đặt App (Android · iOS · macOS · Windows)"
+          >
+            <Download className="h-3 w-3" />
+            <span className="hidden xl:inline">Tải App</span>
+          </button>
+
           {/* Custom Theme Quick Pill */}
           <button
             type="button"
@@ -495,7 +696,7 @@ export function Layout({
           >
             <Sparkles className="h-3 w-3 group-hover:rotate-12 transition-transform" />
             <span className="hidden sm:inline font-semibold">Custom Theme</span>
-            <span className="rounded bg-black/30 px-1 py-0.2 text-[9px] font-mono text-slate-300">
+            <span className="rounded bg-black/20 dark:bg-black/30 px-1 py-0.2 text-[9px] font-mono text-current">
               {themeConfig.themeName.split(' ')[0]}
             </span>
           </button>
@@ -505,8 +706,8 @@ export function Layout({
             type="button"
             onClick={() => setAuxPaneOpen((p) => !p)}
             className={cn(
-              'rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200 transition',
-              auxPaneOpen && 'bg-white/15 text-cyan-400'
+              'rounded p-1.5 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 transition dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200',
+              auxPaneOpen && 'bg-slate-200 text-cyan-600 dark:bg-white/15 dark:text-cyan-400'
             )}
             title="Đóng / mở Auxiliary Panel (Artifacts, Files)"
           >
@@ -521,36 +722,25 @@ export function Layout({
           <button
             type="button"
             onClick={onToggleTheme}
-            className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-slate-200"
-            title="Đổi giao diện Sáng / Tối"
+            className="rounded p-1.5 text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+            title={isDark ? 'Chuyển sang nền sáng' : 'Chuyển sang nền tối'}
           >
-            <Activity className="h-3.5 w-3.5" />
+            {isDark ? (
+              <Sun className="h-3.5 w-3.5 text-amber-400" />
+            ) : (
+              <Moon className="h-3.5 w-3.5 text-indigo-500" />
+            )}
           </button>
 
-          {/* Desktop Windows Action Buttons */}
-          <div className="hidden sm:flex items-center gap-1 pl-1 border-l border-white/10">
-            <button
-              type="button"
-              className="flex h-5 w-6 items-center justify-center rounded text-slate-400 hover:bg-white/10 hover:text-slate-200"
-              title="Thu nhỏ"
-            >
-              <Minus className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              className="flex h-5 w-6 items-center justify-center rounded text-slate-400 hover:bg-white/10 hover:text-slate-200"
-              title="Phóng to"
-            >
-              <Square className="h-2.5 w-2.5" />
-            </button>
-            <button
-              type="button"
-              className="flex h-5 w-6 items-center justify-center rounded text-slate-400 hover:bg-rose-500 hover:text-white"
-              title="Đóng"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
+          {/* Desktop Fullscreen Button */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="hidden sm:flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+            title="Toàn màn hình"
+          >
+            <Maximize2 className="h-3 w-3" />
+          </button>
         </div>
       </header>
 
@@ -561,7 +751,7 @@ export function Layout({
         {/* Mobile Backdrop for Left Sidebar or Right Aux Pane */}
         {(sidebarOpen || auxPaneOpen) && (
           <div
-            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
             onClick={() => {
               setSidebarOpen(false);
               setAuxPaneOpen(false);
@@ -574,7 +764,7 @@ export function Layout({
         {/* LEFT SIDEBAR (.bg-sidebar)                                   */}
         {/* ============================================================ */}
         {sidebarOpen && (
-          <aside className="agy-glass-sidebar pb-safe fixed inset-y-0 left-0 z-40 flex w-[82vw] max-w-[288px] shrink-0 flex-col border-r border-white/10 bg-[#0c0f1c]/95 backdrop-blur-xl shadow-2xl md:static md:z-20 md:w-64 md:bg-[#0c0f1c]/80 md:shadow-none">
+          <aside className="agy-glass-sidebar pb-safe fixed inset-y-0 left-0 z-50 flex w-[82vw] max-w-[288px] shrink-0 flex-col border-r border-white/10 bg-[#0c0f1c]/95 text-slate-100 backdrop-blur-xl shadow-2xl md:static md:z-20 md:w-64 md:bg-[#0c0f1c]/80 md:shadow-none">
             {/* Mobile Drawer Top Header */}
             <div className="pt-safe flex items-center justify-between border-b border-white/10 px-3 py-2.5 md:hidden">
               <span className="flex items-center gap-2 text-xs font-bold text-white">
@@ -658,9 +848,28 @@ export function Layout({
               >
                 <span className="flex items-center gap-2.5">
                   <Code2 className="h-3.5 w-3.5 text-purple-400" />
-                  <span>Customizations</span>
+                  <span>Pocket IDE &amp; Dự án</span>
                 </span>
-                <span className="text-[10px] text-slate-500">Skills & Tools</span>
+                <span className="text-[10px] text-slate-500">Editor · Git</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onTabChange('outputs');
+                  closeSidebarOnMobile();
+                }}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-lg px-2.5 py-2 md:py-1.5 text-xs font-medium transition',
+                  activeTab === 'outputs'
+                    ? 'bg-white/15 text-white font-semibold'
+                    : 'text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                )}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Kết quả &amp; Brain</span>
+                </span>
               </button>
 
               <button
@@ -689,11 +898,11 @@ export function Layout({
                 className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 md:py-1.5 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition"
               >
                 <span className="flex items-center gap-2.5">
-                  <Download className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Tải Desktop App</span>
+                  <Download className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Tải &amp; Cài App</span>
                 </span>
-                <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
-                  Đang phát triển
+                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                  4 nền tảng
                 </span>
               </button>
             </div>
@@ -976,9 +1185,13 @@ export function Layout({
               </div>
 
               {systemStatus && (
-                <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 font-mono">
                   <span className="truncate">{systemStatus.hostname || 'Antigravity PC'}</span>
-                  <span>127.0.0.1:8765</span>
+                  <span className="shrink-0">
+                    {systemStatus.tunnel_running
+                      ? 'Tunnel Active'
+                      : `${systemStatus.lan_ip}:${systemStatus.port}`}
+                  </span>
                 </div>
               )}
             </div>
@@ -992,14 +1205,20 @@ export function Layout({
           data-main-content-body="true"
           className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
         >
-          {children}
+          {activeTab === 'prompt' ? (
+            children
+          ) : (
+            <div className="mx-auto w-full max-w-6xl flex-1 px-3 py-4 pb-6 sm:px-6 sm:py-6">
+              {children}
+            </div>
+          )}
         </main>
 
         {/* ============================================================ */}
         {/* RIGHT AUXILIARY PANE (Drawer on mobile, split on desktop)    */}
         {/* ============================================================ */}
         {auxPaneOpen && (
-          <aside className="agy-glass-sidebar pt-safe pb-safe fixed inset-y-0 right-0 z-40 flex w-[86vw] max-w-[320px] shrink-0 flex-col border-l border-white/10 bg-[#0c0f1c]/95 backdrop-blur-xl shadow-2xl animate-in slide-in-from-right-10 duration-200 md:static md:z-20 md:w-80 md:bg-[#0c0f1c]/85 md:pt-0 md:shadow-none">
+          <aside className="agy-glass-sidebar pt-safe pb-safe fixed inset-y-0 right-0 z-50 flex w-[86vw] max-w-[320px] shrink-0 flex-col border-l border-white/10 bg-[#0c0f1c]/95 text-slate-100 backdrop-blur-xl shadow-2xl animate-in slide-in-from-right-10 duration-200 md:static md:z-20 md:w-80 md:bg-[#0c0f1c]/85 md:pt-0 md:shadow-none">
             {/* Header of Aux Pane */}
             <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs font-semibold">
               <div className="flex items-center gap-1">
@@ -1150,6 +1369,56 @@ export function Layout({
       </div>
 
       {/* ============================================================== */}
+      {/* MOBILE BOTTOM NAVIGATION BAR (< md)                            */}
+      {/* ============================================================== */}
+      <nav
+        aria-label="Điều hướng di động"
+        className="agy-glass-header pb-safe relative z-30 grid shrink-0 grid-cols-5 border-t border-slate-200/80 bg-white/95 backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-[#090b14]/95"
+      >
+        {(
+          [
+            { id: 'prompt', label: 'Chat AI', icon: MessageSquare, badge: pendingApprovalCount },
+            { id: 'projects', label: 'Pocket IDE', icon: Code2, badge: 0 },
+            { id: 'dashboard', label: 'Tổng quan', icon: Zap, badge: activeRunCount },
+            { id: 'outputs', label: 'Kết quả', icon: Brain, badge: 0 },
+            { id: 'settings', label: 'Cài đặt', icon: Settings, badge: 0 },
+          ] as Array<{ id: TabKey; label: string; icon: typeof MessageSquare; badge: number }>
+        ).map((item) => {
+          const Icon = item.icon;
+          const active = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                onTabChange(item.id);
+                setSidebarOpen(false);
+              }}
+              className={cn(
+                'relative flex min-h-[54px] flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-semibold transition',
+                active
+                  ? 'text-cyan-600 dark:text-cyan-400'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+              )}
+            >
+              {active && (
+                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-cyan-500" />
+              )}
+              <div className="relative">
+                <Icon className="h-4 w-4" />
+                {item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 inline-flex min-w-[14px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-slate-950">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span className="truncate max-w-full">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* ============================================================== */}
       {/* MOBILE COMMAND SEARCH OVERLAY (#429)                           */}
       {/* ============================================================== */}
       {mobileSearchOpen && (
@@ -1172,7 +1441,7 @@ export function Layout({
       )}
 
       {/* ============================================================== */}
-      {/* DESKTOP APP DOWNLOAD MODAL (Windows / macOS / Linux - Dev)     */}
+      {/* APP DOWNLOAD MODAL (Android / iOS / macOS / Windows)           */}
       {/* ============================================================== */}
       {downloadModalOpen && (
         <div
@@ -1187,7 +1456,7 @@ export function Layout({
               type="button"
               onClick={() => setDownloadModalOpen(false)}
               aria-label="Đóng"
-              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
+              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-black/15 text-slate-700 transition hover:bg-black/25 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>

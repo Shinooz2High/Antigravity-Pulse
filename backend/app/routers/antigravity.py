@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -28,8 +29,9 @@ async def list_sessions(
     _: dict[str, Any] = Depends(require_auth),
 ) -> AntigravitySessionsResponse:
     scanner: BrainScanner = request.app.state.brain_scanner
+    sessions = await asyncio.to_thread(scanner.list_sessions)
     return AntigravitySessionsResponse(
-        sessions=scanner.list_sessions(),
+        sessions=sessions,
         brain_dir=str(scanner.brain_dir),
     )
 
@@ -41,7 +43,7 @@ async def get_session(
     _: dict[str, Any] = Depends(require_auth),
 ) -> AntigravitySessionDetailResponse:
     scanner: BrainScanner = request.app.state.brain_scanner
-    return scanner.get_session_detail(conv_id)
+    return await asyncio.to_thread(scanner.get_session_detail, conv_id)
 
 
 @router.get("/sessions/{conv_id}/steps/{step_index}/full", response_model=TranscriptStep)
@@ -52,7 +54,7 @@ async def get_full_step(
     _: dict[str, Any] = Depends(require_auth),
 ) -> TranscriptStep:
     scanner: BrainScanner = request.app.state.brain_scanner
-    return scanner.get_full_step(conv_id, step_index)
+    return await asyncio.to_thread(scanner.get_full_step, conv_id, step_index)
 
 
 @router.get("/artifacts", response_model=ArtifactsListResponse)
@@ -66,9 +68,11 @@ async def list_artifacts(
     scanner: BrainScanner = request.app.state.brain_scanner
     runner = request.app.state.runner_service
 
-    combined: list[ArtifactItem] = []
-    combined.extend(scanner.list_all_brain_artifacts())
-    combined.extend(runner.list_all_output_artifacts())
+    brain_items, output_items = await asyncio.gather(
+        asyncio.to_thread(scanner.list_all_brain_artifacts),
+        asyncio.to_thread(runner.list_all_output_artifacts),
+    )
+    combined: list[ArtifactItem] = [*brain_items, *output_items]
 
     cat_filter = category.strip().lower()
     query_filter = q.strip().lower()
@@ -97,7 +101,7 @@ async def get_artifact_content(
     _: dict[str, Any] = Depends(require_auth),
 ) -> FileContentResponse:
     scanner: BrainScanner = request.app.state.brain_scanner
-    return scanner.get_artifact_content(conv_id, path)
+    return await asyncio.to_thread(scanner.get_artifact_content, conv_id, path)
 
 
 @router.get("/artifact-raw")

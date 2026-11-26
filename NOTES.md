@@ -20,8 +20,8 @@ Tài liệu này mô tả chi tiết vai trò của từng thư mục và tập 
 | `start.sh` | Script khởi chạy nhanh cho macOS / Linux (tương đương `start.ps1`). |
 | `build-mobile.ps1` | Script PowerShell tự động build frontend Vite, đồng bộ Capacitor sang Android/iOS và biên dịch Android APK (nếu có Java/Android SDK). |
 | `wrangler.jsonc` | Cấu hình deploy giao diện tĩnh SPA (`frontend/dist`) lên Cloudflare Workers Assets. |
-| `install/` | Thư mục cài đặt ứng dụng: `README.md` (hướng dẫn PC/Android/iOS), `install-pc.bat` & `install-pc.ps1` (bộ cài offline cho Windows), `install-android.ps1` (cài APK qua USB/ADB). |
-| `.github/workflows/build-mobile.yml` | GitHub Actions tự động build Android APK (`Antigravity-Pulse-Android.apk`), phát hành lên GitHub Releases và đóng gói dự án iOS Xcode. |
+| `install/` | Thư mục cài đặt ứng dụng: `README.md` (hướng dẫn Windows/macOS/Android/iOS), `install-pc.bat` & `install-pc.ps1` (Windows offline), `install-mac.sh` (macOS/Linux), `install-android.ps1` (cài APK qua USB/ADB). |
+| `.github/workflows/build-mobile.yml` | GitHub Actions tự động build Android `.apk`, đóng gói unsigned iOS `.ipa` + Xcode project, đính kèm bộ cài `.bat` & `.command` lên GitHub Releases `latest`. |
 | `skills-lock.json` | File khóa phiên bản các Agent Skills đi kèm trong workspace. |
 | `.agents/skills/lucian-uxui/` | Bộ skill hỗ trợ thiết kế & chuyển đổi UI/UX (`SKILL.md`, `references/porting.md`, `scripts/lucian-uxui.mjs`). |
 
@@ -37,7 +37,7 @@ Máy chủ Python làm cầu nối thời gian thực giữa điện thoại và
 | `backend/pyproject.toml` | Metadata dự án Python và cấu hình công cụ/pytest. |
 | `backend/requirements.txt` | Danh sách thư viện Python cần thiết (`google-antigravity`, `fastapi`, `uvicorn`, `websockets`, `watchdog`, `qrcode`, `httpx`, `pytest`, v.v.). |
 | `backend/app/__init__.py` | Đánh dấu package Python `app`. |
-| `backend/app/main.py` | Điểm khởi chạy FastAPI: đăng ký CORS, middleware, gắn các router API/WebSocket, serve giao diện tĩnh PWA (`frontend/dist`) và quản lý vòng đời `file_watcher` / `tunnel_service`. |
+| `backend/app/main.py` | Điểm khởi chạy FastAPI: đăng ký CORS, middleware, gắn các router API/WebSocket, serve giao diện tĩnh PWA + bộ cài đặt đa nền tảng (`.ps1`, `.sh`, `.bat`, `.command`, `.apk`, `.ipa`, `.zip`) và quản lý vòng đời `file_watcher` / `tunnel_service`. |
 | `backend/app/config.py` | Đọc và quản lý cấu hình môi trường (`Settings`) từ `.env` và biến hệ thống. |
 | `backend/app/models.py` | Định nghĩa các Pydantic schema dùng chung cho request/response API và sự kiện WebSocket. |
 | `backend/app/utils.py` | Các hàm tiện ích dùng chung: phát hiện IP LAN/Tailscale, kiểm tra đường dẫn an toàn (chống path traversal), định dạng dữ liệu. |
@@ -49,8 +49,8 @@ Máy chủ Python làm cầu nối thời gian thực giữa điện thoại và
 | `backend/app/routers/auth.py` | Xác thực bằng mã PIN 6 số, ghép nối qua QR token, link 1 chạm (`?pair=`/`?c=`) và quản lý phiên đăng nhập thiết bị. |
 | `backend/app/routers/google_auth.py` | API đăng nhập **Continue with Google** (OAuth 2.0, ADC, Direct Token) và đồng bộ trạng thái tài khoản Google / Antigravity CLI (`agy`). |
 | `backend/app/routers/prompts.py` | Gửi prompt (kèm file/ảnh đính kèm), xem danh sách/chi tiết các phiên chạy, duyệt hoặc từ chối lời gọi tool (`approve`/`deny`), dừng phiên chạy. |
-| `backend/app/routers/antigravity.py` | Truy vấn danh sách các phiên Antigravity trên PC (`~/.gemini/antigravity/brain/*`), đọc transcript tóm tắt/đầy đủ và tải artifact. |
-| `backend/app/routers/projects.py` | Quản lý danh sách workspace/dự án, duyệt thư mục, đọc/ghi nội dung file (`PUT file-content` chống xung đột mtime 409), tạo thư mục (`mkdir`), đổi tên (`rename`), xóa (`entry`) an toàn và xem trạng thái Git. |
+| `backend/app/routers/antigravity.py` | Truy vấn danh sách các phiên Antigravity trên PC (`~/.gemini/antigravity/brain/*`), đọc transcript tóm tắt/đầy đủ và tải artifact bất đồng bộ (`asyncio.to_thread`). |
+| `backend/app/routers/projects.py` | Quản lý danh sách workspace/dự án (non-blocking `asyncio.to_thread`), duyệt thư mục, đọc/ghi nội dung file (`PUT file-content` chống xung đột mtime 409), tạo thư mục (`mkdir`), đổi tên (`rename`), xóa (`entry`) an toàn và xem trạng thái Git. |
 | `backend/app/routers/ide.py` | API Pocket IDE (`/api/ide/*`): Git source control (`status`, `diff`, `log`, `stage`, `unstage`, `discard`, `commit`, `pull`, `push`, `checkout`) và Workspace Checkpoints (`list`, `create`, `preview`, `restore`). |
 | `backend/app/routers/workspace_tools.py` | API công cụ workspace (`/api/tools/*`): Terminal đa phiên (`sessions`, `exec`, `interrupt`), quét cổng dev server (`/ports`), Bộ nhớ AI (`/memories`) và Ghi chú/Checklist (`/notes`). |
 | `backend/app/routers/system.py` | Đọc/cập nhật cài đặt ứng dụng, điều khiển tunnel, kiểm tra trạng thái hệ thống và phát hiện các CLI Agent đã cài (`agy`, `claude`, `codex`, `opencode`). |
@@ -109,9 +109,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | --- | --- |
 | `frontend/public/manifest.webmanifest` | Web App Manifest cho phép cài đặt app lên màn hình chính điện thoại (PWA). |
 | `frontend/public/terms.html`, `privacy.html` | Trang web tĩnh Điều Khoản Dịch Vụ và Chính Sách Bảo Mật phục vụ tại `agypulse.dpdns.org/terms.html` và `/privacy.html` (dùng cho Google OAuth Consent Screen & Mobile Store). |
-| `frontend/public/install.ps1`, `cai-antigravity-pulse.bat`, `uninstall.ps1`, `go-antigravity-pulse.bat` | Bộ script cài đặt & gỡ cài đặt 1 chạm phục vụ trực tiếp qua `https://agypulse.dpdns.org`. |
-| `frontend/public/install.ps1` | Script cài đặt 1 dòng trên Windows PC phục vụ tại `https://agypulse.dpdns.org/install.ps1`. |
-| `frontend/public/cai-antigravity-pulse.bat` | File `.bat` bấm đúp cài đặt 1 chạm trên Windows phục vụ tại `https://agypulse.dpdns.org/cai-antigravity-pulse.bat`. |
+| `frontend/public/install.ps1`, `cai-antigravity-pulse.bat`, `install.sh`, `cai-antigravity-pulse.command`, `uninstall.ps1`, `go-antigravity-pulse.bat` | Bộ script cài đặt & gỡ cài đặt 1 chạm đa nền tảng (Windows / macOS / Linux) phục vụ trực tiếp qua `https://agypulse.dpdns.org`. |
 | `frontend/public/_redirects` | Quy tắc định tuyến SPA (`/* /index.html 200`) cho hosting tĩnh. |
 | `frontend/public/sw.js` | Service Worker hỗ trợ caching và trải nghiệm PWA. |
 | `frontend/public/icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `agy-logo.png` | Bộ biểu tượng và logo ứng dụng cho Android, iOS và trình duyệt. |
@@ -121,7 +119,7 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 ### 3.3. Mã nguồn giao diện (`frontend/src/`)
 | File | Mô tả chi tiết |
 | --- | --- |
-| `frontend/src/main.tsx` | Điểm khởi chạy React, bọc `CustomThemeProvider` và gắn vào DOM. |
+| `frontend/src/main.tsx` | Điểm khởi chạy React, bọc `RootErrorBoundary` và `CustomThemeProvider` trước khi gắn vào DOM. |
 | `frontend/src/App.tsx` | Component gốc điều phối trạng thái đăng nhập, WebSocket, điều hướng các tab chính, toast thông báo và các modal toàn cục. |
 | `frontend/src/index.css` | Stylesheet chính tích hợp Tailwind CSS và biến CSS giao diện. |
 | `frontend/src/vite-env.d.ts` | Khai báo kiểu TypeScript cho môi trường Vite. |
@@ -148,14 +146,14 @@ Giao diện di động (Mobile-first PWA, hỗ trợ đóng gói Android/iOS qua
 | --- | --- |
 | `AuthScreen.tsx` | Màn hình đăng nhập bằng mã PIN 6 số, quét mã QR ghép nối hoặc tài khoản Google / Antigravity. |
 | `GoogleAgyAuthSection.tsx` | Phần đăng nhập Google OAuth 2.0 và đồng bộ phiên Antigravity (AGY) cục bộ. |
-| `Layout.tsx` | Khung bố cục ứng dụng di động (header, vùng nội dung, thanh điều hướng dưới). |
+| `Layout.tsx` | Khung bố cục responsive PC & Mobile (menu bar Desktop, sidebar thu gọn tự động dưới `768px`, hộp thoại Cài đặt 4 nền tảng, thanh điều hướng 5 tab dưới đáy cho điện thoại). |
 | `MarkdownRenderer.tsx` | Trình hiển thị Markdown nâng cao hỗ trợ GFM, công thức toán KaTeX, biểu đồ Mermaid và tô sáng cú pháp code (`highlight.js`). |
 | `ArtifactModal.tsx` | Hộp thoại xem chi tiết, phóng to ảnh và tải xuống artifact. |
 | `ModelSelectorModal.tsx` | Hộp thoại chọn model AI để thực thi prompt. |
 | `QrScannerModal.tsx` | Modal mở camera quét mã QR ghép nối trực tiếp bằng `jsqr`. |
 | `ToolApprovalBanner.tsx` | Thanh thông báo nổi yêu cầu người dùng duyệt hoặc từ chối lời gọi tool của AI ngay trên điện thoại. |
 | `ide/` | Bộ component Pocket IDE: `CodeEditorPane.tsx` (soạn thảo multi-tab, tìm kiếm, xử lý xung đột 409, gửi sang AI Chat), `GitSourceControlPane.tsx` (diff, stage, commit, pull/push, log), `CheckpointsPane.tsx` (snapshot & restore), `TerminalPane.tsx` (shell đa phiên + phím ảo mobile), `NotesAndPortsPane.tsx` (ghi chú checklist & xem trước dev server ports). |
-| `library/` | Bộ UI component tái sử dụng: `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `ThinkingAccordion`, `TypeToConfirmDeleteModal`, `UndoableDeleteList`. |
+| `library/` | Bộ UI component tái sử dụng: `AppDownloadCard` (4 tab cài đặt Android · iOS · macOS · Windows), `AuroraBackground`, `BreadcrumbPath`, `EmptyProjectsState`, `NotchedBottomTabBar`, `ProductDropdown`, `PromptComposer`, `StackingToasts`, `ThemeSwitch`, `ThinkingAccordion`, `TypeToConfirmDeleteModal`, `UndoableDeleteList`. |
 | `theme/` | Các component hiệu ứng giao diện: `BootIntroOverlay` (màn hình khởi động), `CustomThemeModal` (trình tùy chỉnh theme), `LiveWallpaperLayer` (lớp hình nền động). |
 
 ---

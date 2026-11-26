@@ -4,29 +4,35 @@
 [![Web Portal](https://img.shields.io/badge/Web%20Portal-agypulse.dpdns.org-06b6d4)](https://agypulse.dpdns.org)
 [![Android APK](https://img.shields.io/badge/Android-Download%20APK-3ddc84)](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)
 
-Điều khiển **Google Antigravity** & workspace trên PC từ **điện thoại (Android / iOS)** hoặc **bất kỳ PC nào khác** theo thời gian thực — hỗ trợ **kết nối 1 chạm bằng link gọn**, **mã 6 ký tự**, **gửi trực tiếp qua Zalo / Messenger**, và **đăng nhập Continue with Google**.
+Điều khiển **Google Antigravity** & workspace trên PC từ **điện thoại (Android / iOS)** hoặc **bất kỳ máy Mac / Windows / Linux nào khác** theo thời gian thực — hỗ trợ **kết nối 1 chạm bằng link gọn**, **mã 6 ký tự**, **gửi trực tiếp qua Zalo / Messenger**, và **đăng nhập Continue with Google**.
 
 - 🌐 **Cổng Web cố định (dùng trên mọi thiết bị):** **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)**
 - 🪟 **Cài 1 chạm trên Windows PC:** **[Tải `cai-antigravity-pulse.bat`](https://agypulse.dpdns.org/cai-antigravity-pulse.bat)**
-- 📱 **Tải App Android (APK):** **[GitHub Releases (Latest)](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)**
-- 📦 **Hướng dẫn cài đặt chi tiết (PC / Android / iOS):** **[install/README.md](install/README.md)**
+- 🍏 **Cài 1 chạm trên macOS (Apple Silicon & Intel):** **[Tải `cai-antigravity-pulse.command`](https://agypulse.dpdns.org/cai-antigravity-pulse.command)**
+- 📱 **Tải App Android (.apk) & iOS (.ipa / Xcode):** **[GitHub Releases (Latest)](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)**
+- 📦 **Hướng dẫn cài đặt chi tiết (Windows / macOS / Android / iOS / Linux):** **[install/README.md](install/README.md)**
 - 📄 **Ghi chú cấu trúc toàn bộ file:** **[NOTES.md](NOTES.md)**
 
 ---
 
-## 1. Cài đặt siêu nhanh trên PC (1 chạm)
+## 1. Cài đặt siêu nhanh trên PC & Mac (1 chạm)
 
-### Cách A — Bấm đúp file (Không cần gõ lệnh)
-1. Tải file **[cai-antigravity-pulse.bat](https://agypulse.dpdns.org/cai-antigravity-pulse.bat)** về máy tính Windows.
-2. **Bấm đúp** vào file vừa tải.
-3. Bộ cài tự động kiểm tra/cài Python, Node.js, Git, `cloudflared`, tải code về `%USERPROFILE%\AntigravityPulse`, tạo **icon `Antigravity Pulse` ngoài Desktop** và khởi chạy ngay lập tức.
+### Windows 10 / 11
+1. **Cách A — Bấm đúp file (Không cần gõ lệnh):** Tải **[`cai-antigravity-pulse.bat`](https://agypulse.dpdns.org/cai-antigravity-pulse.bat)** về máy và **bấm đúp**. Bộ cài tự kiểm tra/cài Python, Node.js, Git, `cloudflared` qua `winget`, tải mã nguồn về `%USERPROFILE%\AntigravityPulse`, tạo **icon `Antigravity Pulse` ngoài Desktop** và khởi chạy ngay.
+2. **Cách B — Dán 1 dòng vào PowerShell:**
+   ```powershell
+   irm https://agypulse.dpdns.org/install.ps1 | iex
+   ```
 
-### Cách B — Dán đúng 1 dòng vào PowerShell
-```powershell
-irm https://agypulse.dpdns.org/install.ps1 | iex
-```
+### macOS (Apple Silicon M1–M4 & Intel) & Linux
+1. **Cách A — Bấm đúp file (macOS):** Tải **[`cai-antigravity-pulse.command`](https://agypulse.dpdns.org/cai-antigravity-pulse.command)** và mở chạy (nếu macOS Gatekeeper hỏi lần đầu: chuột phải → **Mở / Open**).
+2. **Cách B — Dán 1 dòng vào Terminal (`zsh` / `bash`):**
+   ```bash
+   curl -fsSL https://agypulse.dpdns.org/install.sh | bash
+   ```
+   > Bộ cài tự động cài `python3`, `node`, `git`, `cloudflared` (qua Homebrew trên macOS hoặc `apt`/`dnf`/`pacman` trên Linux), đồng bộ mã nguồn vào `~/AntigravityPulse`, tạo ứng dụng **`~/Applications/Antigravity Pulse.app`** + lối tắt **`~/Desktop/Antigravity Pulse.command`** (trên macOS) và khởi chạy server qua `./start.sh`.
 
-> Lần sau chỉ cần **bấm đúp icon `Antigravity Pulse` ngoài Desktop** (hoặc `start.bat`) để khởi động. Server sẽ tự mở Cloudflare Tunnel và hiện **Mã 6 ký tự** cùng **Link gọn 1 chạm**.
+> Lần sau chỉ cần bấm đúp icon **`Antigravity Pulse`** ngoài Desktop (Windows) hoặc **`Antigravity Pulse.app` / `Antigravity Pulse.command`** (macOS) để khởi động. Server sẽ tự mở Cloudflare Tunnel và hiện **Mã 6 ký tự** cùng **Link gọn 1 chạm**.
 
 ---
 
@@ -47,11 +53,14 @@ Không cần nhớ IP, không cần chung Wi-Fi, không cần cấu hình mạng
 
 ---
 
-## 3. Cài đặt App trên Điện thoại (Android & iOS)
+## 3. Cài đặt App trên 4 Nền tảng (Android · iOS · macOS · Windows)
 
-- **Android (App Native `.apk`):** Tải trực tiếp từ **[GitHub Releases](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)** và cài lên máy.
-- **Android / iOS (Web App PWA — 10 giây):** Mở **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)** bằng **Chrome** (Android) hoặc **Safari** (iOS) → chọn **Thêm vào Màn hình chính** (*Add to Home Screen* / *Install app*).
-- **PC khác (Desktop PWA):** Mở **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)** trên Chrome/Edge → bấm biểu tượng **Install App** ở góc phải thanh địa chỉ.
+- **Android (Native `.apk` + Chrome PWA):** Tải trực tiếp **[`Antigravity-Pulse-Android.apk`](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest/download/Antigravity-Pulse-Android.apk)** từ GitHub Releases và cài lên máy, hoặc mở **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)** bằng **Chrome** → **Cài đặt ứng dụng**.
+- **iOS — iPhone / iPad (Safari PWA & `.ipa` / Xcode):**
+  - *Cách nhanh nhất (không cần máy Mac):* Mở **[https://agypulse.dpdns.org](https://agypulse.dpdns.org)** bằng **Safari** → bấm **Chia sẻ (`□↑`)** → chọn **Thêm vào Màn hình chính** (*Add to Home Screen*) để chạy toàn màn hình như app gốc.
+  - *Sideload Native `.ipa` / Xcode:* Tải gói `Antigravity-Pulse-iOS.ipa` (unsigned cho AltStore / SideStore / Sideloadly) hoặc `Antigravity-Pulse-iOS-Project.zip` từ **[GitHub Releases](https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest)**.
+- **macOS (App `.command` + `.app` & Terminal):** Chạy `curl -fsSL https://agypulse.dpdns.org/install.sh | bash` hoặc tải **`cai-antigravity-pulse.command`** để tự cài môi trường, tạo **`Antigravity Pulse.app`** và cài Desktop PWA trên Chrome/Safari.
+- **Windows (10/11):** Chạy `irm https://agypulse.dpdns.org/install.ps1 | iex`, bấm đúp **`cai-antigravity-pulse.bat`**, hoặc bấm icon **Install App** trên Chrome/Edge để dùng như Desktop App.
 
 Xem hướng dẫn chi tiết từng nền tảng tại **[install/README.md](install/README.md)**.
 
@@ -82,8 +91,10 @@ Xem hướng dẫn chi tiết từng nền tảng tại **[install/README.md](in
 6. **Kho Kết quả & Trình duyệt Workspace (Artifacts & File Browser)**
    - Xem báo cáo Markdown (GFM, KaTeX, Mermaid, code highlight), phóng to ảnh, xem PDF/HTML và tải về trực tiếp.
    - Duyệt thư mục dự án PC an toàn (chống path traversal) kèm trạng thái Git branch/dirty.
-7. **Giao diện Tùy biến & Capacitor Native (Android / iOS)**
-   - Live Wallpaper, Boot Intro Overlay, Custom Theme, Haptics, StatusBar, LocalNotifications và Share sheet native.
+7. **Giao diện Responsive PC & Mobile + Capacitor Native (Android / iOS)**
+   - **Mobile-first Navigation**: Thanh điều hướng 5 tab cố định dưới đáy màn hình (`Chat AI`, `Pocket IDE`, `Tổng quan`, `Kết quả`, `Cài đặt`), tự động đóng sidebar khi thu hẹp cửa sổ và tự thu gọn cây thư mục IDE khi mở tệp trên điện thoại.
+   - **Desktop Workspace & Unified 4-Platform Install Center**: Thanh menu PC đầy đủ, chuyển Dark/Light Mode đồng bộ với Live Wallpaper, nút mở nhanh hộp thoại cài đặt **Android · iOS · macOS · Windows** ngay từ màn hình đăng nhập, sidebar hoặc mục Cài đặt.
+   - **Tích hợp Native**: Live Wallpaper, Boot Intro Overlay, Custom Theme, Haptics, StatusBar, LocalNotifications và Share sheet native.
 
 ---
 
@@ -106,8 +117,9 @@ Xem hướng dẫn chi tiết từng nền tảng tại **[install/README.md](in
 │       ├── lib/                 # api, ideApi, quickConnect, native (Capacitor), utils
 │       └── pages/               # Dashboard, Prompt, Outputs, Projects (Pocket IDE), Settings
 ├── install/                     # Bộ cài đặt offline PC & hướng dẫn cài đặt Android / iOS
-├── .github/workflows/           # GitHub Actions tự động build Android APK & iOS Xcode project
+├── .github/workflows/           # GitHub Actions tự động build Android .apk, iOS .ipa/Xcode & .bat/.command
 ├── start.bat / start.ps1        # Script khởi chạy nhanh trên Windows
+├── start.sh                     # Script khởi chạy nhanh trên macOS / Linux
 ├── build-mobile.ps1             # Script build gói di động Capacitor Android/iOS
 ├── wrangler.jsonc               # Cấu hình deploy static SPA lên Cloudflare Workers Assets
 ├── .env.example                 # Mẫu biến môi trường
@@ -119,11 +131,14 @@ Xem hướng dẫn chi tiết từng nền tảng tại **[install/README.md](in
 
 ## Chạy thủ công cho lập trình viên / Manual Setup
 
-### Chạy bằng script có sẵn (Windows)
+### Chạy bằng script có sẵn (Windows & macOS / Linux)
 ```powershell
 .\start.ps1                # Tự tạo venv, build frontend (nếu chưa có) & khởi chạy server
 .\start.ps1 -Tunnel        # Ép bật Cloudflare Quick Tunnel từ dòng lệnh
 .\start.ps1 -Port 8765     # Đổi cổng lắng nghe
+```
+```bash
+chmod +x start.sh && ./start.sh   # macOS / Linux: tự tạo venv, build frontend & chạy server
 ```
 
 ### Backend (Python 3.10+)

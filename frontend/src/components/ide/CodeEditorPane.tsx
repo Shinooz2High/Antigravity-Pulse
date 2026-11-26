@@ -106,6 +106,7 @@ export function CodeEditorPane({
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [fsModal, setFsModal] = useState<FsModalState | null>(null);
   const [fsBusy, setFsBusy] = useState(false);
+  const [mobileExplorerOpen, setMobileExplorerOpen] = useState(true);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -230,6 +231,9 @@ export function CodeEditorPane({
       };
       setTabs((prev) => [...prev, newTab]);
       setActiveRelPath(newTab.relPath);
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        setMobileExplorerOpen(false);
+      }
       editorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       onNotify(
@@ -477,8 +481,13 @@ export function CodeEditorPane({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[330px_minmax(0,1fr)]">
-      {/* File Explorer */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-[#111827]">
+      {/* File Explorer (auto-collapses on mobile when editing; always visible on lg+) */}
+      <section
+        className={cn(
+          'rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm lg:block dark:border-slate-800 dark:bg-[#111827]',
+          mobileExplorerOpen ? 'block' : 'hidden'
+        )}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5 dark:border-slate-800">
           <div className="min-w-0 flex-1 overflow-x-auto py-0.5">
             <BreadcrumbPath
@@ -648,6 +657,15 @@ export function CodeEditorPane({
       >
         {/* Tab Bar */}
         <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/80 px-2 pt-2 dark:border-slate-800 dark:bg-[#0b101b]">
+          <button
+            type="button"
+            onClick={() => setMobileExplorerOpen((v) => !v)}
+            className="mb-1.5 mr-1 inline-flex min-h-[30px] shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 lg:hidden dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
+            title="Ẩn / Hiện cây thư mục"
+          >
+            <Folder className="h-3.5 w-3.5 text-amber-400" />
+            <span>{mobileExplorerOpen ? 'Ẩn cây tệp' : 'Cây tệp'}</span>
+          </button>
           {tabs.length === 0 ? (
             <div className="px-2 pb-2 text-xs text-slate-500 dark:text-slate-400">
               Chưa mở tệp nào

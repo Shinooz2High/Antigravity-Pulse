@@ -49,6 +49,13 @@ STATIC_ASSET_EXTS = {
     ".woff",
     ".woff2",
     ".ttf",
+    ".ps1",
+    ".sh",
+    ".bat",
+    ".command",
+    ".apk",
+    ".ipa",
+    ".zip",
 }
 
 
@@ -171,15 +178,25 @@ def create_app(config: AppConfig | None = None, *, start_watcher: bool = True) -
         if normalized:
             candidate, _ = safe_jail_path(dist_dir, normalized, allow_root=True)
             if candidate.is_file():
+                suffix = candidate.suffix.lower()
                 mime_type, _ = mimetypes.guess_type(str(candidate))
-                if candidate.suffix.lower() == ".webmanifest":
+                if suffix == ".webmanifest":
                     mime_type = "application/manifest+json"
-                elif candidate.suffix.lower() in {".js", ".mjs"}:
+                elif suffix in {".js", ".mjs"}:
                     mime_type = "application/javascript"
+                elif suffix in {".ps1", ".sh"}:
+                    mime_type = "text/plain; charset=utf-8"
 
                 headers: dict[str, str] = {}
-                if candidate.name in {"sw.js", "index.html", "manifest.webmanifest"}:
+                if candidate.name in {"sw.js", "index.html", "manifest.webmanifest"} or suffix in {
+                    ".ps1",
+                    ".sh",
+                    ".bat",
+                    ".command",
+                }:
                     headers["Cache-Control"] = "no-cache"
+                if suffix in {".bat", ".command"}:
+                    headers["Content-Disposition"] = f'attachment; filename="{candidate.name}"'
                 return FileResponse(
                     path=str(candidate),
                     media_type=mime_type or "application/octet-stream",

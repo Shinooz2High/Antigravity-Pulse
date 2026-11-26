@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -62,7 +63,8 @@ async def list_projects(
     _: dict[str, Any] = Depends(require_auth),
 ) -> ProjectsResponse:
     svc: ProjectService = request.app.state.project_service
-    return ProjectsResponse(projects=svc.list_projects())
+    projects = await asyncio.to_thread(svc.list_projects)
+    return ProjectsResponse(projects=projects)
 
 
 @router.post("", response_model=Project)
@@ -122,7 +124,7 @@ async def list_project_files(
     _: dict[str, Any] = Depends(require_auth),
 ) -> ProjectFilesResponse:
     svc: ProjectService = request.app.state.project_service
-    return svc.list_files(project_id, path)
+    return await asyncio.to_thread(svc.list_files, project_id, path)
 
 
 @router.get("/{project_id}/file-content", response_model=FileContentResponse)
@@ -133,7 +135,7 @@ async def get_project_file_content(
     _: dict[str, Any] = Depends(require_auth),
 ) -> FileContentResponse:
     svc: ProjectService = request.app.state.project_service
-    return svc.get_file_content(project_id, path)
+    return await asyncio.to_thread(svc.get_file_content, project_id, path)
 
 
 @router.put("/{project_id}/file-content", response_model=FileContentResponse)

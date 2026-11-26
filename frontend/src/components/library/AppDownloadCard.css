@@ -145,14 +145,49 @@
 .u393-tl {
   position: relative;
   display: inline-grid;
-  grid-template-columns: repeat(var(--u393-cols, 2), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--u393-cols, 4), minmax(0, 1fr));
   width: 100%;
-  max-width: 276px;
+  max-width: 380px;
   margin-top: 15px;
   padding: 3px;
   border-radius: 12px;
   background: var(--ux-surface-2);
   box-shadow: inset 0 0 0 1px var(--ux-line);
+}
+
+.u393-cur-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .15);
+  border: 1px solid rgba(16, 185, 129, .35);
+  color: #10b981;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.u393-sec-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ux-accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.u393-sec-btn:hover {
+  opacity: .85;
 }
 
 .u393-pl {
@@ -173,15 +208,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  height: 30px;
+  gap: 4px;
+  height: 32px;
+  padding: 0 4px;
   border: 0;
   border-radius: 9px;
   background: none;
   color: var(--ux-ink-3);
   font: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
+  white-space: nowrap;
   cursor: pointer;
   transition: color .2s;
 }

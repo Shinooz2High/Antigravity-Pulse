@@ -85,6 +85,7 @@ export function ProjectsPage({
   const [saving, setSaving] = useState(false);
 
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [mobileProjectListOpen, setMobileProjectListOpen] = useState(false);
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || projects[0] || null,
@@ -179,10 +180,10 @@ export function ProjectsPage({
       {/* Header + Add */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">
+          <h2 className="agy-page-title text-base font-bold text-slate-900 dark:text-white">
             Pocket IDE &amp; Dự án Workspace
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="agy-page-subtitle text-xs text-slate-500 dark:text-slate-400">
             Chỉnh sửa mã nguồn, quản lý Git, chụp Checkpoint, chạy Terminal và xem cổng trực tiếp từ điện thoại
           </p>
         </div>
@@ -196,11 +197,40 @@ export function ProjectsPage({
         </button>
       </div>
 
+      {/* Mobile Compact Project Bar (keeps 5-tab Pocket IDE right at the top on phones) */}
+      {projects.length > 0 && selectedProject && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-cyan-500/30 bg-white px-3.5 py-2.5 shadow-sm md:hidden dark:bg-[#111827]">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <FolderGit2 className="h-4 w-4 shrink-0 text-cyan-500" />
+              <span className="truncate text-sm font-bold text-slate-900 dark:text-white">
+                {selectedProject.name}
+              </span>
+              {selectedProject.git_branch && (
+                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                  {selectedProject.git_branch}
+                </span>
+              )}
+            </div>
+            <p className="truncate font-mono text-[10px] text-slate-500 dark:text-slate-400">
+              {selectedProject.path}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileProjectListOpen((v) => !v)}
+            className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          >
+            {mobileProjectListOpen ? 'Thu gọn' : `Đổi dự án (${projects.length})`}
+          </button>
+        </div>
+      )}
+
       {/* Project Cards */}
       {projects.length === 0 ? (
         <EmptyProjectsState onCreateProject={openCreateModal} />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className={cn('gap-3 md:grid md:grid-cols-2', mobileProjectListOpen ? 'grid' : 'hidden')}>
           {projects.map((p) => {
             const active = selectedProject?.id === p.id;
             return (
