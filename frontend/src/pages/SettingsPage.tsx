@@ -3,11 +3,9 @@ import {
   AlertTriangle,
   Bell,
   Brain,
-  Camera,
   Check,
   Clock,
   Copy,
-  Download,
   ExternalLink,
   FlaskConical,
   Globe,
@@ -32,18 +30,11 @@ import {
 import {
   api,
   getDeviceName,
-  getServerUrl,
-  parsePairingInput,
   PUBLIC_WEB_PORTAL_URL,
   setDeviceName,
-  setServerUrl,
-  setToken,
 } from '../lib/api';
 import {
-  getMobilePlatform,
-  isIosBrowser,
   isNativeApp,
-  isStandalonePwa,
   openExternalLink,
   shareContent,
   subscribePwaInstallAvailability,
@@ -51,7 +42,6 @@ import {
 } from '../lib/native';
 import { cn, copyToClipboard, formatBytes, formatRelativeTime } from '../lib/utils';
 import { GoogleAgyAuthSection } from '../components/GoogleAgyAuthSection';
-import { QrScannerModal } from '../components/QrScannerModal';
 import { AppDownloadCard, MACOS_INSTALL_CMD, WINDOWS_INSTALL_CMD } from '../components/library';
 import type {
   DeviceInfo,
@@ -137,9 +127,7 @@ export function SettingsPage({
   const [savingTunnelConfig, setSavingTunnelConfig] = useState(false);
   const [localDeviceName, setLocalDeviceName] = useState(() => getDeviceName());
   const [mobileBuilds, setMobileBuilds] = useState<MobileBuildInfo | null>(null);
-  const [serverUrlEdit, setServerUrlEdit] = useState(() => getServerUrl());
   const [canInstallPwa, setCanInstallPwa] = useState(false);
-  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   // Discord Rich Presence State
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(false);
@@ -346,55 +334,6 @@ export function SettingsPage({
       onNotify(err instanceof Error ? err.message : 'Không thể lưu cấu hình Discord RPC', 'error');
     } finally {
       setSavingDiscordRpc(false);
-    }
-  };
-
-  const handleSaveServerUrl = async () => {
-    const parsed = parsePairingInput(serverUrlEdit);
-    const nextUrl = parsed.serverUrl || '';
-    setServerUrl(nextUrl);
-    setServerUrlEdit(nextUrl);
-    if (parsed.pairToken) {
-      try {
-        const res = await api.pair(parsed.pairToken, getDeviceName());
-        setToken(res.token);
-        await onRefreshSystem();
-        await loadData();
-        onNotify('Đã chuyển máy chủ PC & ghép nối thành công!', 'success');
-        return;
-      } catch (err) {
-        onNotify(err instanceof Error ? err.message : 'Ghép nối máy chủ mới thất bại', 'error');
-        return;
-      }
-    }
-    await onRefreshSystem();
-    onNotify(
-      nextUrl
-        ? `Đã đặt máy chủ PC: ${nextUrl}`
-        : 'Đã đặt lại máy chủ mặc định theo trình duyệt',
-      'success'
-    );
-  };
-
-  const handleQrSwitchServer = async (decoded: string) => {
-    setQrModalOpen(false);
-    const parsed = parsePairingInput(decoded);
-    if (parsed.serverUrl) {
-      setServerUrl(parsed.serverUrl);
-      setServerUrlEdit(parsed.serverUrl);
-    }
-    if (parsed.pairToken) {
-      try {
-        const res = await api.pair(parsed.pairToken, getDeviceName());
-        setToken(res.token);
-        await onRefreshSystem();
-        await loadData();
-        onNotify('Đã quét QR & chuyển sang máy chủ PC mới!', 'success');
-      } catch (err) {
-        onNotify(err instanceof Error ? err.message : 'Lỗi ghép nối máy chủ mới', 'error');
-      }
-    } else {
-      onNotify('Đã cập nhật địa chỉ máy chủ từ mã QR', 'info');
     }
   };
 
@@ -1684,243 +1623,6 @@ export function SettingsPage({
         )}
       </section>
 
-      {/* Unified 4-Platform Install Center (Android, iOS, macOS, Windows) */}
-      <section className="rounded-2xl border border-cyan-500/25 bg-white p-4 shadow-sm sm:p-5 dark:border-cyan-500/20 dark:bg-[#111827]">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 text-white shadow-sm shadow-cyan-500/30">
-              <Smartphone className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Trung tâm Cài đặt Đa nền tảng (Android · iOS · macOS · Windows)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Cài đặt Antigravity Pulse làm App trên điện thoại hoặc PC Bridge 1 chạm trên Windows &amp; macOS
-              </p>
-            </div>
-          </div>
-
-          <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-bold text-cyan-700 dark:text-cyan-300">
-            {isNativeApp()
-              ? getMobilePlatform() === 'ios'
-                ? 'Đang chạy: iOS Native App'
-                : 'Đang chạy: Android Native App'
-              : isStandalonePwa()
-                ? 'Đang chạy: App PWA Độc lập'
-                : 'Đang chạy: Trình duyệt Web'}
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          {/* Active PC Server URL Config */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-[#090d16]">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                Địa chỉ Máy chủ PC kết nối (LAN IP / Cloudflare Tunnel)
-              </label>
-              <button
-                type="button"
-                onClick={() => setQrModalOpen(true)}
-                className="inline-flex items-center gap-1 rounded-lg bg-cyan-500/15 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-500/25 dark:text-cyan-300"
-              >
-                <Camera className="h-3.5 w-3.5" />
-                Quét QR máy chủ
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="url"
-                value={serverUrlEdit}
-                onChange={(e) => setServerUrlEdit(e.target.value)}
-                placeholder={
-                  systemStatus?.tunnel_url ||
-                  systemStatus?.lan_url ||
-                  'VD: http://192.168.1.84:8765 hoặc https://xxx.trycloudflare.com'
-                }
-                className="min-h-[42px] flex-1 rounded-xl border border-slate-200 bg-white px-3 font-mono text-xs outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-[#111827] dark:text-white"
-              />
-              <button
-                type="button"
-                onClick={handleSaveServerUrl}
-                className="min-h-[42px] rounded-xl bg-cyan-500 px-4 text-xs font-semibold text-slate-950 hover:bg-cyan-400"
-              >
-                Lưu máy chủ
-              </button>
-            </div>
-          </div>
-
-          {/* 4-Platform Install Grid: Android, iOS, macOS, Windows */}
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {/* Android */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  🤖 Android (.apk &amp; PWA)
-                </span>
-                <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">
-                  {mobileBuilds?.android_apk_available ? 'Đã có file APK' : 'APK + PWA Ready'}
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                Tải trực tiếp <code className="font-mono">Antigravity-Pulse-Android.apk</code> từ GitHub Releases hoặc cài nhanh bằng Chrome.
-              </p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    openExternalLink(
-                      mobileBuilds?.android_apk_available
-                        ? api.getMobilePackageDownloadUrl('android')
-                        : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest/download/Antigravity-Pulse-Android.apk'
-                    )
-                  }
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Tải Android APK{' '}
-                  {mobileBuilds?.android_apk_size
-                    ? `(${formatBytes(mobileBuilds.android_apk_size)})`
-                    : ''}
-                </button>
-                {canInstallPwa && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const ok = await triggerPwaInstall();
-                      if (ok) onNotify('Đã cài đặt ứng dụng lên màn hình chính!', 'success');
-                    }}
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-300"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Cài PWA 1 chạm
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* iOS */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  🍎 iOS — iPhone &amp; iPad (.ipa &amp; Safari)
-                </span>
-                <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300">
-                  {mobileBuilds?.ios_ipa_available ? 'Đã có file IPA' : 'Safari PWA + IPA'}
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                {isIosBrowser()
-                  ? 'Trên Safari iPhone: Nhấn Chia sẻ (↑) ở thanh dưới → Chọn "Thêm vào MH chính" (Add to Home Screen).'
-                  : 'Mở bằng Safari iPhone → Chia sẻ → Thêm vào MH chính, hoặc tải .ipa / Xcode từ Releases.'}
-              </p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    openExternalLink(
-                      mobileBuilds?.ios_ipa_available
-                        ? api.getMobilePackageDownloadUrl('ios')
-                        : 'https://github.com/Shinooz2High/App-Antigravity-on-moblie-/releases/latest'
-                    )
-                  }
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {mobileBuilds?.ios_ipa_available ? 'Tải iOS IPA' : 'Mở iOS Releases (.ipa)'}
-                </button>
-                {mobileBuilds?.deep_link_pair_url && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopy('Deep Link mở App gốc', mobileBuilds.deep_link_pair_url!)}
-                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Chép Deep Link
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* macOS */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  🍏 macOS (Apple Silicon &amp; Intel)
-                </span>
-                <span className="rounded bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-600 dark:text-cyan-300">
-                  1-Click + .app
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                Tải file <code className="font-mono">.command</code> hoặc dán 1 dòng Terminal — tự tạo <strong>Antigravity Pulse.app</strong> &amp; chạy server trên Mac.
-              </p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                <a
-                  href="/cai-antigravity-pulse.command"
-                  download="cai-antigravity-pulse.command"
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Tải bộ cài macOS
-                </a>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleCopy(
-                      'lệnh cài macOS Terminal',
-                      'curl -fsSL https://agypulse.dpdns.org/install.sh | bash'
-                    )
-                  }
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Chép lệnh Terminal
-                </button>
-              </div>
-            </div>
-
-            {/* Windows */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#090d16]">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  🪟 Windows 10 / 11 (PC 1 chạm)
-                </span>
-                <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-600 dark:text-sky-300">
-                  .bat + PowerShell
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                Tải file <code className="font-mono">cai-antigravity-pulse.bat</code> bấm đúp để tự cài Python, Node, cloudflared và tạo icon Desktop.
-              </p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                <a
-                  href="/cai-antigravity-pulse.bat"
-                  download="cai-antigravity-pulse.bat"
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-sky-500 px-3 text-xs font-semibold text-slate-950 hover:bg-sky-400"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Tải bộ cài Windows
-                </a>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleCopy(
-                      'lệnh cài Windows PowerShell',
-                      'irm https://agypulse.dpdns.org/install.ps1 | iex'
-                    )
-                  }
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#111827] dark:text-slate-200"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Chép lệnh PS
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Discord Rich Presence */}
       <section className="rounded-2xl border border-indigo-500/30 bg-white p-4 shadow-sm sm:p-5 dark:border-indigo-500/30 dark:bg-[#111827]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -2135,12 +1837,6 @@ export function SettingsPage({
           </div>
         </div>
       </section>
-
-      <QrScannerModal
-        isOpen={qrModalOpen}
-        onClose={() => setQrModalOpen(false)}
-        onScanSuccess={handleQrSwitchServer}
-      />
     </div>
   );
 }
